@@ -29,7 +29,7 @@ export const registerUser = async (req, res) => {
     if (userExists)
       return res.json({ success: false, message: "User already exists" });
 
-    const newUser = new userModel({ name, email, password });
+    const newUser = new userModel({ name, email, password, confirmPassword });
     await newUser.save();
 
     const token = createToken(newUser._id);
@@ -100,12 +100,23 @@ export const updateUserProfile = async (req, res) => {
     password,
     confirmPassword,
   } = req.body;
+  const getInitials = (name = "") => {
+    const parts = name.trim().split(" ");
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() || "";
+    return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+  };
 
   try {
     const user = await userModel.findById(userId).select("+password");
     if (!user)
       return res.json({ success: false, message: "User not found" });
-    if (name) user.name = name;
+
+    if (name) {
+      user.name = name;
+      if (!profileImage) {
+        user.profileImage = getInitials(name);
+      }
+    }
     if (phone) user.phone = phone;
     if (address) user.address = address;
     if (linkedin) user.linkedin = linkedin;
