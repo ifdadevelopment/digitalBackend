@@ -1,12 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
-const getInitials = (name = "") => {
-  const parts = name.trim().split(" ");
-  if (parts.length === 1) return parts[0][0]?.toUpperCase() || "";
-  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
-};
-
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
@@ -18,9 +12,6 @@ const userSchema = new mongoose.Schema(
     address: { type: String, default: "" },
     profileImage: {
       type: String,
-      default: function () {
-        return getInitials(this.name || "");
-      }
     },
     linkedin: { type: String, default: "" },
     facebook: { type: String, default: "" },

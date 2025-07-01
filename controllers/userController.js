@@ -3,7 +3,8 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import validator from "validator";
 
-const createToken = (id) => jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
+const createToken = (id) =>
+  jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
 export const registerUser = async (req, res) => {
   const { name, email, password, confirmPassword } = req.body;
@@ -18,29 +19,26 @@ export const registerUser = async (req, res) => {
     return res.json({ success: false, message: "Passwords do not match" });
 
   if (password.length < 8)
-    return res.json({ success: false, message: "Password must be at least 8 characters" });
+    return res.json({
+      success: false,
+      message: "Password must be at least 8 characters",
+    });
 
   try {
     const userExists = await userModel.findOne({ email });
     if (userExists)
       return res.json({ success: false, message: "User already exists" });
 
-    const newUser = new userModel({ name, email, password, confirmPassword });
+    const newUser = new userModel({ name, email, password });
     await newUser.save();
 
     const token = createToken(newUser._id);
+    const userData = await userModel.findById(newUser._id).select("-password");
 
     return res.json({
       success: true,
-      user: {
-        _id: newUser._id,
-        name: newUser.name,
-        email: newUser.email,
-        role: newUser.role,
-        profileImage: newUser.profileImage,
-        createdAt: newUser.createdAt,
-      },
-      token
+      user: userData,
+      token,
     });
   } catch (error) {
     console.error(error);
@@ -53,43 +51,40 @@ export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password)
-    return res.json({ success: false, message: "Please provide all fields", user: null, token: "" });
+    return res.json({ success: false, message: "Please provide all fields" });
 
   try {
     const user = await userModel.findOne({ email }).select("+password");
     if (!user)
-      return res.json({ success: false, message: "User not found", user: null, token: "" });
+      return res.json({ success: false, message: "User not found" });
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch)
-      return res.json({ success: false, message: "Incorrect password", user: null, token: "" });
+      return res.json({ success: false, message: "Incorrect password" });
 
     const token = createToken(user._id);
-   const userData = await userModel.findById(user._id).select("-password");
+
+    const userData = await userModel.findById(user._id).select("-password");
 
     return res.json({
       success: true,
-      user: {
-        _id: userData._id,
-        name: userData.name,
-        email: userData.email,
-        role: userData.role,
-        phone: userData.phone,
-        address: userData.address,
-        linkedin: userData.linkedin,
-        facebook: userData.facebook,
-        instagram: userData.instagram,
-        profileImage: userData.profileImage || "",
-        createdAt: userData.createdAt,
-      },
-      token
+      user: userData,
+      token,
     });
   } catch (error) {
-    return res.json({ success: false, message: "Login failed", user: null, token: "" });
+    return res.json({ success: false, message: "Login failed" });
   }
 };
+
 export const logoutUser = async (req, res) => {
-  res.json({ success: true, message: "User logged out successfully" });
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
+  res
+    .status(200)
+    .json({ success: true, message: "User logged out successfully" });
 };
 
 export const updateUserProfile = async (req, res) => {
@@ -103,35 +98,57 @@ export const updateUserProfile = async (req, res) => {
     facebook,
     instagram,
     password,
-    confirmPassword
+    confirmPassword,
   } = req.body;
 
   try {
     const user = await userModel.findById(userId).select("+password");
-    if (!user) return res.json({ success: false, message: "User not found" });
-
-    user.name = name || user.name;
-    user.phone = phone || user.phone;
-    user.address = address || user.address;
-    user.profileImage = profileImage || user.profileImage;
-    user.linkedin = linkedin || user.linkedin;
-    user.facebook = facebook || user.facebook;
-    user.instagram = instagram || user.instagram;
+    if (!user)
+      return res.json({ success: false, message: "User not found" });
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+    if (linkedin) user.linkedin = linkedin;
+    if (facebook) user.facebook = facebook;
+    if (instagram) user.instagram = instagram;
+    if (profileImage) user.profileImage = profileImage;
 
     if (password || confirmPassword) {
       if (password !== confirmPassword) {
         return res.json({ success: false, message: "Passwords do not match" });
       }
       if (password.length < 8) {
-        return res.json({ success: false, message: "Password must be at least 8 characters" });
+        return res.json({
+          success: false,
+          message: "Password must be at least 8 characters",
+        });
       }
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(password, salt);
     }
 
     await user.save();
-    return res.json({ success: true, message: "Profile updated successfully" });
+
+    const updatedUser = await userModel.findById(userId).select("-password");
+
+    return res.json({
+      success: true,
+      message: "Profile updated successfully",
+      user: updatedUser,
+    });
   } catch (error) {
+    console.error(error);
     return res.json({ success: false, message: "Error updating profile" });
+  }
+};
+
+export const getUserProfile = async (req, res) => {
+  try {
+    const user = await userModel.findById(req.user._id).select("-password");
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    res.json({ success: true, user });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to load user" });
   }
 };
