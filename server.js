@@ -26,7 +26,7 @@ const CLIENT_URL =
 
 const allowedOrigins = [
   CLIENT_URL,
-  "http://localhost:5000"
+  "http://localhost:4173"
 ];
 
 app.use(
