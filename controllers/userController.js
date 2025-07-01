@@ -100,39 +100,25 @@ export const updateUserProfile = async (req, res) => {
     password,
     confirmPassword,
   } = req.body;
-  const getInitials = (name = "") => {
-    const parts = name.trim().split(" ");
-    if (parts.length === 1) return parts[0][0]?.toUpperCase() || "";
-    return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
-  };
 
   try {
     const user = await userModel.findById(userId).select("+password");
-    if (!user)
-      return res.json({ success: false, message: "User not found" });
-
-    if (name) {
-      user.name = name;
-      if (!profileImage) {
-        user.profileImage = getInitials(name);
-      }
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
+    if (name) user.name = name;
     if (phone) user.phone = phone;
     if (address) user.address = address;
     if (linkedin) user.linkedin = linkedin;
     if (facebook) user.facebook = facebook;
     if (instagram) user.instagram = instagram;
     if (profileImage) user.profileImage = profileImage;
-
     if (password || confirmPassword) {
       if (password !== confirmPassword) {
-        return res.json({ success: false, message: "Passwords do not match" });
+        return res.status(400).json({ success: false, message: "Passwords do not match" });
       }
-      if (password.length < 8) {
-        return res.json({
-          success: false,
-          message: "Password must be at least 8 characters",
-        });
+      if (!password || password.length < 8) {
+        return res.status(400).json({ success: false, message: "Password must be at least 8 characters" });
       }
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(password, salt);
@@ -148,10 +134,13 @@ export const updateUserProfile = async (req, res) => {
       user: updatedUser,
     });
   } catch (error) {
-    console.error(error);
-    return res.json({ success: false, message: "Error updating profile" });
+    console.error("Error updating profile:", error);
+    return res.status(500).json({ success: false, message: "Error updating profile" });
   }
 };
+
+
+
 
 export const getUserProfile = async (req, res) => {
   try {

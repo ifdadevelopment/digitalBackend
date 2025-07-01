@@ -4,7 +4,8 @@ import { connectDB } from "./config/DB.js";
 import userRouter from "./routes/userRoute.js";
 import "dotenv/config";
 import fileUpload from "express-fileupload";
-// import { v2 as cloudinary } from "cloudinary";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // app config
 const app = express();
@@ -26,7 +27,7 @@ const CLIENT_URL =
 
 app.use(
   cors({
-    origin:[CLIENT_URL,"http://localhost:4173","http://localhost:5173"],
+    origin: [CLIENT_URL, "http://localhost:4173", "http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
@@ -40,17 +41,13 @@ connectDB();
 app.get("/", (req, res) => {
   res.send("server start");
 });
-// app.use('/uploads', express.static('uploads'));
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "dist")));
 app.use("/api/user", userRouter);
-
-
-
-
-// cloudinary.config({
-//   cloud_name: process.env.APP_CLOUDINARY_CLOUD_NAME,
-//   api_key: process.env.APP_CLOUDINARY_API_KEY,
-//   api_secret: process.env.APP_CLOUDINARY_API_SECRET,
-// });
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
+});
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
