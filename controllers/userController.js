@@ -6,6 +6,7 @@ import validator from "validator";
 const createToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
+// REGISTER
 export const registerUser = async (req, res) => {
   const { name, email, password, confirmPassword } = req.body;
 
@@ -33,12 +34,18 @@ export const registerUser = async (req, res) => {
     await newUser.save();
 
     const token = createToken(newUser._id);
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000, 
+    });
+
     const userData = await userModel.findById(newUser._id).select("-password");
 
     return res.json({
       success: true,
       user: userData,
-      token,
     });
   } catch (error) {
     console.error(error);
@@ -46,7 +53,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
-
+// LOGIN
 export const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
@@ -64,17 +71,25 @@ export const loginUser = async (req, res) => {
 
     const token = createToken(user._id);
 
+    // Set token as cookie
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     const userData = await userModel.findById(user._id).select("-password");
 
     return res.json({
       success: true,
       user: userData,
-      token,
     });
   } catch (error) {
     return res.json({ success: false, message: "Login failed" });
   }
 };
+
 
 export const logoutUser = async (req, res) => {
   res.clearCookie("token", {
