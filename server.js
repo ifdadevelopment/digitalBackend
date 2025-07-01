@@ -24,16 +24,27 @@ const CLIENT_URL =
     ? process.env.CLIENT_URL_PROD
     : process.env.CLIENT_URL_DEV;
 
+const allowedOrigins = [
+  CLIENT_URL,
+  "http://localhost:5000"
+];
+
 app.use(
   cors({
-    origin:CLIENT_URL,
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      } else {
+        return callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
   })
 );
-console.log(`CORS Origin: ${CLIENT_URL}`);
-app.options("*", cors());
+
 
 // db connection
 connectDB();
