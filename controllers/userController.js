@@ -70,8 +70,6 @@ export const loginUser = async (req, res) => {
       return res.json({ success: false, message: "Incorrect password" });
 
     const token = createToken(user._id);
-
-    // Set token as cookie
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",

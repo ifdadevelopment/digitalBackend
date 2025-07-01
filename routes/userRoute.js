@@ -1,6 +1,7 @@
 import express from "express";
 import { registerUser, loginUser, updateUserProfile,getUserProfile, logoutUser } from "../controllers/userController.js";
-import verifyUser from "../middleware/auth.js"; 
+import { verifyUser } from "../middleware/auth.js";
+ 
 const userRouter = express.Router();
 userRouter.post("/register", registerUser);
 userRouter.get("/me",verifyUser, getUserProfile);

@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import userModel from "../models/UserModel.js";
 
-const verifyUser = async (req, res, next) => {
+export const verifyUser = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.startsWith("Bearer ")
     ? authHeader.split(" ")[1]
@@ -38,4 +38,13 @@ const verifyUser = async (req, res, next) => {
   }
 };
 
-export default verifyUser;
+
+export const isAdmin = (req, res, next) => {
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    return res
+      .status(403)
+      .json({ success: false, message: "Admin access required." });
+  }
+};

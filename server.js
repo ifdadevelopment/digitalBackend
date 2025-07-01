@@ -4,6 +4,7 @@ import { connectDB } from "./config/DB.js";
 import userRouter from "./routes/userRoute.js";
 import "dotenv/config";
 import fileUpload from "express-fileupload";
+import courseRouter from "./routes/courseRoute.js";
 // import { v2 as cloudinary } from "cloudinary";
 
 // app config
@@ -42,6 +43,7 @@ app.get("/", (req, res) => {
 });
 // app.use('/uploads', express.static('uploads'));
 app.use("/api/user", userRouter);
+app.use("/api/course", courseRouter);
 
 
 
