@@ -26,7 +26,7 @@ const CLIENT_URL =
 
 app.use(
   cors({
-    origin:[CLIENT_URL,"http://localhost:4173"],
+    origin:[CLIENT_URL,"http://localhost:4173","http://localhost:5173"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
