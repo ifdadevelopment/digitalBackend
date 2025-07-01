@@ -139,9 +139,6 @@ export const updateUserProfile = async (req, res) => {
   }
 };
 
-
-
-
 export const getUserProfile = async (req, res) => {
   try {
     const user = await userModel.findById(req.user._id).select("-password");

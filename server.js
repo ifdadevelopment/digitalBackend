@@ -26,7 +26,7 @@ const CLIENT_URL =
 
 app.use(
   cors({
-    origin:[CLIENT_URL,"http://localhost:4173","http://localhost:5173"],
+    origin:[CLIENT_URL,"http://localhost:4173","http://localhost:5173","https://digitalmarketing890.netlify.app"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,
