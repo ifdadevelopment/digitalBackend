@@ -1,6 +1,4 @@
 import Course from "../models/CourseModel.js";
-
-// CREATE Course (admin only)
 export const createCourse = async (req, res) => {
   try {
     const {
@@ -115,5 +113,27 @@ export const deleteCourse = async (req, res) => {
   } catch (error) {
     console.error("Error deleting course:", error);
     res.status(500).json({ success: false, message: "Failed to delete course" });
+  }
+};
+
+export const editCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateFields = req.body;
+
+    const updatedCourse = await Course.findOneAndUpdate(
+      { id },
+      updateFields,
+      { new: true }
+    );
+
+    if (!updatedCourse) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+
+    res.json({ success: true, message: "Course updated successfully", course: updatedCourse });
+  } catch (error) {
+    console.error("Error updating course:", error);
+    res.status(500).json({ success: false, message: "Failed to update course" });
   }
 };

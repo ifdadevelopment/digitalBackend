@@ -43,7 +43,7 @@ app.get("/", (req, res) => {
 });
 // app.use('/uploads', express.static('uploads'));
 app.use("/api/user", userRouter);
-app.use("/api/course", courseRouter);
+app.use("/api/courses", courseRouter);
 
 
 

@@ -48,6 +48,8 @@ courseSchema.pre("save", function (next) {
   if (this.type === "Business") {
     this.whatYouWillLearn = undefined;
     this.modules = undefined;
+    this.price = undefined;
+    this.salePrice = undefined;
     this.topics = undefined;
     this.curriculum = undefined;
     this.requirements = undefined;
