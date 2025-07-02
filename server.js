@@ -5,6 +5,7 @@ import userRouter from "./routes/userRoute.js";
 import "dotenv/config";
 import fileUpload from "express-fileupload";
 import courseRouter from "./routes/courseRoute.js";
+import formRouter from "./routes/formRoutes.js";
 // import { v2 as cloudinary } from "cloudinary";
 
 // app config
@@ -44,6 +45,7 @@ app.get("/", (req, res) => {
 // app.use('/uploads', express.static('uploads'));
 app.use("/api/user", userRouter);
 app.use("/api/courses", courseRouter);
+app.use("/api/forms", formRouter);
 
 
 
