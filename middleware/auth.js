@@ -48,3 +48,12 @@ export const isAdmin = (req, res, next) => {
       .json({ success: false, message: "Admin access required." });
   }
 };
+export const isAuthVerify = (req, res, next) => {
+  if (req.user && req.user.role === "student") {
+    next();
+  } else {
+    return res
+      .status(403)
+      .json({ success: false, message: "Student access required." });
+  }
+};

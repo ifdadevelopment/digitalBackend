@@ -2,9 +2,8 @@ import mongoose from "mongoose";
 
 const formModelSchema = new mongoose.Schema(
   {
-    fullName: {
+    name: {
       type: String,
-      required: [true, "Full name is required"],
     },
     email: {
       type: String,
@@ -19,14 +18,18 @@ const formModelSchema = new mongoose.Schema(
     },
     message: {
       type: String,
-      required: [true, "Message is required"],
     },
     course: {
       type: String,
     },
-    consent: {
+    formHeading: {
+      type: String,
+    },
+    courseTitle: {
+      type: String,
+    },
+    policy: {
       type: Boolean,
-      required: true,
     },
     type: {
       type: String,
