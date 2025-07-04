@@ -10,10 +10,10 @@ import { isAdmin, verifyUser } from "../middleware/auth.js";
 
 const courseRouter = express.Router();
 
-courseRouter.post("/create", verifyUser, isAdmin, createCourse);
-courseRouter.put("/edit/:id", verifyUser, isAdmin, editCourse);
+courseRouter.post("/create",  createCourse);
+courseRouter.put("/edit/:id", editCourse);
 courseRouter.get("/courseAll", getAllCourses);
 courseRouter.get("/:courseId", getCourseById); 
-courseRouter.delete("/:id", verifyUser, isAdmin, deleteCourse);
+courseRouter.delete("/:id",  deleteCourse);
 
 export default courseRouter;
