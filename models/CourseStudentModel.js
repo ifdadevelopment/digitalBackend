@@ -1,54 +1,72 @@
-import mongoose from "mongoose";
-const ContentSchema = new mongoose.Schema({
-  type: { type: String, enum: ["video", "pdf", "image", "test"], required: true },
+import mongoose from 'mongoose';
+import { v4 as uuidv4 } from 'uuid';
+
+const questionSchema = new mongoose.Schema({
+  question: { type: String, required: true },
+  options: [String],
+  answer: { type: String, required: true },
+  selectedAnswer: String,
+  isCorrect: Boolean,
+}, { _id: false });
+
+const contentSchema = new mongoose.Schema({
+  type: { type: String, enum: ['video', 'pdf', 'image', 'test'], required: true },
   name: String,
   duration: String,
   url: String,
   completed: { type: Boolean, default: false },
-  answers: [String],
-  score: Number
-}, { _id: false });
-const TopicSchema = new mongoose.Schema({
-  topicTitle: String,
-  completed: { type: Boolean, default: false },
-  contents: [ContentSchema]
-}, { _id: false });
-const ModuleSchema = new mongoose.Schema({
-  moduleTitle: String,
-  completed: { type: Boolean, default: false },
-  description: String,
-  topics: [TopicSchema]
-}, { _id: false });
-const FinalTestSchema = new mongoose.Schema({
-  name: String,
-  type: { type: String, enum: ["test"], default: "test" },
-  questions: [{
-    question: String,
-    options: [String],
-    answer: String
-  }],
-  completed: { type: Boolean, default: false },
   score: Number,
-  answers: [String]
+  questions: [questionSchema],
 }, { _id: false });
 
-const CourseProgressSchema = new mongoose.Schema({
-  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true }, 
-  title: String,
+const topicSchema = new mongoose.Schema({
+  topicId: {
+    type: String,
+    default: uuidv4,
+    unique: true
+  },
+  topicTitle: String,
+  completed: { type: Boolean, default: false },
+  contents: [contentSchema],
+}, { _id: false });
+
+const moduleSchema = new mongoose.Schema({
+  moduleTitle: String,
+  description: String,
+  completed: { type: Boolean, default: false },
+  topics: [topicSchema],
+}, { _id: false });
+
+const finalTestSchema = new mongoose.Schema({
+  name: String,
+  type: { type: String, default: 'test' },
+  completed: { type: Boolean, default: false },
+  score: Number,
+  questions: [questionSchema],
+}, { _id: false });
+
+const enrolledCourseSchema = new mongoose.Schema({
+  courseId: { type: String, required: true }, 
+  title: { type: String, required: true },
   image: String,
+  previewVideo: String,
+  duration: String,
+  totalHours: { type: Number, default: 0 },
+  watchedHours: { type: Number, default: 0 },
   badge: String,
   level: String,
   tags: [String],
-  totalHours: Number,
-  watchedHours: { type: Number, default: 0 },
+  progress: { type: Boolean, default: false },
   progressPercent: { type: Number, default: 0 },
-  modules: [ModuleSchema],
-  finalTest: FinalTestSchema,
-  enrolledAt: { type: Date, default: Date.now }
+  isCompleted: { type: Boolean, default: false },
+  startedAt: { type: Date, default: Date.now },
+  completedAt: Date,
+  modules: [moduleSchema],
+  finalTest: finalTestSchema,
 }, { _id: false });
 
-const CourseStudentSchema = new mongoose.Schema({
-  enrolledCourses: [CourseProgressSchema]
-}, { timestamps: true });
+const courseStudentSchema = new mongoose.Schema({
+  enrolledCourses: [enrolledCourseSchema]
+});
 
-export default mongoose.model("CourseStudent", CourseStudentSchema);
+export default mongoose.model('CourseStudent', courseStudentSchema);

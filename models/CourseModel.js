@@ -1,26 +1,18 @@
 import mongoose from "mongoose";
-
-const lessonSchema = new mongoose.Schema({
-  title: { type: String },
-  duration: { type: String },
-});
-
-const curriculumSchema = new mongoose.Schema({
-  section: { type: String },
-  lectures: [lessonSchema],
-});
-
-const moduleSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  completed: { type: Boolean, default: false },
-  description: { type: String },
-  lessons: [{ type: String }],
-});
+import { v4 as uuidv4 } from "uuid";
 
 const courseSchema = new mongoose.Schema(
   {
-    id: { type: String, unique: true, required: true },
-    title: { type: String, required: true },
+    courseId: {
+      type: String,
+      unique: true,
+      required: true,
+      default: () => uuidv4(),
+    },
+    title: {
+      type: String,
+      required: true,
+    },
     subtitle: { type: String },
     rating: { type: Number, default: 0 },
     image: { type: String },
@@ -28,35 +20,41 @@ const courseSchema = new mongoose.Schema(
     studentsEnrolled: { type: Number, default: 0 },
     lastUpdated: { type: String },
     category: { type: String },
-    type: { type: String, enum: ["Student", "Business"], required: true }, 
+    type: {
+      type: String,
+      enum: ["Student", "Business"],
+      required: true,
+    },
     previewVideo: { type: String },
     whatYouWillLearn: [{ type: String }],
-    modules: [moduleSchema],
     price: { type: Number },
     salePrice: { type: Number },
     topics: [{ type: String }],
     includes: [{ type: String }],
-    curriculum: [curriculumSchema],
     requirements: [{ type: String }],
     description: { type: String },
-    downloadBrochure: { type: String }, 
+    downloadBrochure: { type: String },
   },
   { timestamps: true }
 );
 
+courseSchema.index({ title: 1, type: 1 }, { unique: true });
 courseSchema.pre("save", function (next) {
+  if (!this.courseId) {
+    this.courseId = uuidv4();
+  }
+
   if (this.type === "Business") {
+    this.previewVideo = undefined;
     this.whatYouWillLearn = undefined;
-    this.modules = undefined;
     this.price = undefined;
     this.salePrice = undefined;
     this.topics = undefined;
-    this.curriculum = undefined;
     this.requirements = undefined;
-    this.previewVideo = undefined;
   } else if (this.type === "Student") {
     this.downloadBrochure = undefined;
   }
+
   next();
 });
 
