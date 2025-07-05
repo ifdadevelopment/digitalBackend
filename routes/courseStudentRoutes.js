@@ -13,8 +13,8 @@ import { verifyPurchasedCourse } from "../middleware/checkPurchased.js";
 
 const courseStudentRouter = express.Router();
 
-courseStudentRouter.get("/getCourseDetails",isAdmin, getAllCourseStudents);
-courseStudentRouter.get("/:id/course/:courseId",verifyPurchasedCourse, getCourseStudentCourseDetails);
+courseStudentRouter.get("/getCourseDetails", getAllCourseStudents);
+courseStudentRouter.get("/:courseId", getCourseStudentCourseDetails);
 courseStudentRouter.post("/create", createCourseStudent);
 courseStudentRouter.put("/:id", updateCourseStudent);
 courseStudentRouter.delete("/:id", deleteCourseStudent);
