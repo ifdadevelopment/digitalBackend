@@ -67,18 +67,23 @@ export const deleteBlog = async (req, res) => {
 };
 
 export const addComment = async (req, res) => {
-  const { name, email, text } = req.body;
+  const { name, email, text, rating } = req.body;
+
   try {
     const blog = await Blog.findById(req.params.id);
     if (!blog) {
       return res.status(404).json({ success: false, message: "Blog not found" });
     }
-
-    blog.comments.push({ name, email, text });
+    blog.comments.push({ name, email, text, rating });
     await blog.save();
 
-    res.status(201).json({ success: true, message: "Comment added", comments: blog.comments });
+    res.status(201).json({
+      success: true,
+      message: "Comment added",
+      comments: blog.comments,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+

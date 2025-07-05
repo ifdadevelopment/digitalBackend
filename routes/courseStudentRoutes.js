@@ -8,8 +8,7 @@ import {
   updateProgress,
   getCourseStudentCourseDetails
 } from "../controllers/courseStudentController.js";
-import { isAdmin } from "../middleware/auth.js";
-import { verifyPurchasedCourse } from "../middleware/checkPurchased.js";
+
 
 const courseStudentRouter = express.Router();
 

@@ -1,6 +1,6 @@
+import { v4 as uuidv4 } from "uuid";
 import Course from "../models/CourseModel.js";
 import CourseStudent from "../models/CourseStudentModel.js";
-import { v4 as uuidv4 } from 'uuid';
 
 export const createCourseStudent = async (req, res, next) => {
   try {
@@ -22,7 +22,11 @@ export const createCourseStudent = async (req, res, next) => {
         message: "Course not found or not a Student-type course"
       });
     }
+const safeTotalHours = Number(totalHours) || 0;
+const safeWatchedHours = Number(watchedHours) || 0;
 
+const progressPercentage =
+  safeTotalHours > 0 ? (safeWatchedHours / safeTotalHours) * 100 : 0;
     const enrolledCourse = {
       courseId: course.courseId,
       title: course.title,
@@ -31,8 +35,8 @@ export const createCourseStudent = async (req, res, next) => {
       badge: badge || "",
       level: level || "Beginner",
       tags: tags || [],
-      totalHours: totalHours || 0,
-      watchedHours: watchedHours || 0,
+    totalHours: safeTotalHours,
+  watchedHours: safeWatchedHours,
       modules: Array.isArray(modules)
         ? modules.map((mod) => ({
             moduleTitle: mod.moduleTitle,
@@ -90,8 +94,8 @@ export const createCourseStudent = async (req, res, next) => {
             questions: []
           },
       progress: false,
-      progressPercent: 0,
-      isCompleted: false,
+      progressPercentage,
+       isCompleted: safeWatchedHours === safeTotalHours && safeTotalHours > 0,
       startedAt: new Date()
     };
 
@@ -122,7 +126,6 @@ export const createCourseStudent = async (req, res, next) => {
     next(error); 
   }
 };
-
 
 export const getAllCourseStudents = async (req, res, next) => {
   try {

@@ -6,7 +6,7 @@ import {
   deleteCourse,
   editCourse,
 } from "../controllers/courseController.js";
-import { isAdmin, verifyUser } from "../middleware/auth.js";
+
 
 const courseRouter = express.Router();
 
