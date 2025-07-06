@@ -7,21 +7,29 @@ import userModel from "../models/UserModel.js";
 // ✅ Create course enrollment (after payment)
 export const createCourseStudent = async (req, res, next) => {
   try {
-    const { _id: userId } = req.user;
     const {
-      courseId, badge, level, tags, totalHours,
-      watchedHours, modules, finalTest,
+      courseId,
+      badge,
+      level,
+      tags,
+      totalHours,
+      watchedHours,
+      modules,
+      finalTest
     } = req.body;
 
     const course = await Course.findOne({ courseId, type: "Student" });
+
     if (!course) {
-      return res.status(404).json({ message: "Course not found or invalid type." });
+      return res.status(404).json({
+        message: "Course not found or not a Student-type course"
+      });
     }
+const safeTotalHours = Number(totalHours) || 0;
+const safeWatchedHours = Number(watchedHours) || 0;
 
-    const safeTotal = Number(totalHours) || 0;
-    const safeWatched = Number(watchedHours) || 0;
-    const progressPercentage = safeTotal > 0 ? (safeWatched / safeTotal) * 100 : 0;
-
+const progressPercentage =
+  safeTotalHours > 0 ? (safeWatchedHours / safeTotalHours) * 100 : 0;
     const enrolledCourse = {
       courseId: course.courseId,
       title: course.title,
@@ -30,80 +38,95 @@ export const createCourseStudent = async (req, res, next) => {
       badge: badge || "",
       level: level || "Beginner",
       tags: tags || [],
-      totalHours: safeTotal,
-      watchedHours: safeWatched,
-      modules: (modules || []).map((mod) => ({
-        moduleTitle: mod.moduleTitle,
-        description: mod.description,
-        completed: mod.completed || false,
-        topics: (mod.topics || []).map((topic) => ({
-          topicId: uuidv4(),
-          topicTitle: topic.topicTitle,
-          completed: topic.completed || false,
-          contents: (topic.contents || []).map((c) => ({
-            type: c.type,
-            name: c.name,
-            duration: c.duration,
-            url: c.url,
-            completed: c.completed || false,
-            score: c.score || 0,
-            questions: (c.questions || []).map((q) => ({
-              question: q.question,
-              options: q.options,
-              answer: q.answer,
-              selectedAnswer: q.selectedAnswer || "",
-              isCorrect: q.isCorrect || false,
-            })),
-          })),
-        })),
-      })),
+    totalHours: safeTotalHours,
+  watchedHours: safeWatchedHours,
+      modules: Array.isArray(modules)
+        ? modules.map((mod) => ({
+            moduleTitle: mod.moduleTitle,
+            description: mod.description,
+            completed: mod.completed || false,
+            topics: Array.isArray(mod.topics)
+              ? mod.topics.map((topic) => ({
+                  topicId: uuidv4(),
+                  topicTitle: topic.topicTitle,
+                  completed: topic.completed || false,
+                  contents: Array.isArray(topic.contents)
+                    ? topic.contents.map((content) => ({
+                        type: content.type,
+                        name: content.name,
+                        duration: content.duration,
+                        url: content.url,
+                        completed: content.completed || false,
+                        score: content.score || 0,
+                        questions: Array.isArray(content.questions)
+                          ? content.questions.map((q) => ({
+                              question: q.question,
+                              options: q.options,
+                              answer: q.answer,
+                              selectedAnswer: q.selectedAnswer || "",
+                              isCorrect: q.isCorrect || false
+                            }))
+                          : []
+                      }))
+                    : []
+                }))
+              : []
+          }))
+        : [],
       finalTest: finalTest
         ? {
             name: finalTest.name || "",
             type: "test",
             completed: finalTest.completed || false,
             score: finalTest.score || 0,
-            questions: (finalTest.questions || []).map((q) => ({
-              question: q.question,
-              options: q.options,
-              answer: q.answer,
-              selectedAnswer: q.selectedAnswer || "",
-              isCorrect: q.isCorrect || false,
-            })),
+            questions: Array.isArray(finalTest.questions)
+              ? finalTest.questions.map((q) => ({
+                  question: q.question,
+                  options: q.options,
+                  answer: q.answer,
+                  selectedAnswer: q.selectedAnswer || "",
+                  isCorrect: q.isCorrect || false
+                }))
+              : []
           }
         : {
             name: "",
             type: "test",
             completed: false,
             score: 0,
-            questions: [],
+            questions: []
           },
       progress: false,
       progressPercentage,
-      isCompleted: safeWatched === safeTotal && safeTotal > 0,
-      startedAt: new Date(),
+       isCompleted: safeWatchedHours === safeTotalHours && safeTotalHours > 0,
+      startedAt: new Date()
     };
 
-    let student = await CourseStudent.findOne({ userId });
+    let courseStudent = await CourseStudent.findOne();
 
-    if (!student) {
-      student = new CourseStudent({
-        userId,
-        enrolledCourses: [enrolledCourse],
+    if (!courseStudent) {
+      courseStudent = new CourseStudent({
+        enrolledCourses: [enrolledCourse]
       });
     } else {
-      const exists = student.enrolledCourses.some((c) => c.courseId === courseId);
-      if (exists) {
-        return res.status(400).json({ message: "Already enrolled in this course." });
+      const alreadyEnrolled = courseStudent.enrolledCourses.find(
+        (c) => c.courseId === course.courseId
+      );
+
+      if (alreadyEnrolled) {
+        return res.status(400).json({
+          message: "Student is already enrolled in this course"
+        });
       }
-      student.enrolledCourses.push(enrolledCourse);
+
+      courseStudent.enrolledCourses.push(enrolledCourse);
     }
 
-    const saved = await student.save();
-    res.status(201).json(saved);
-  } catch (err) {
-    console.error("createCourseStudent error:", err);
-    next(err);
+    const saved = await courseStudent.save();
+    return res.status(201).json(saved);
+  } catch (error) {
+    console.error("Create course student error:", error);
+    next(error); 
   }
 };
 
