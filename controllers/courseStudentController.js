@@ -215,6 +215,115 @@ export const getPurchasedEnrolledCourseDetailsByUser = async (req, res) => {
     });
   }
 };
+// ✅ GET Resume Data for Specific Course
+export const getCourseResume = async (req, res, next) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user._id;
+
+    const courseStudent = await CourseStudent.findOne({ userId });
+
+    if (!courseStudent) {
+      return res.status(200).json({
+        resume: {
+          lastWatched: null,
+          watchedHours: 0,
+          progressPercent: 0,
+          progress: false,
+          isCompleted: false
+        }
+      });
+    }
+
+    const course = courseStudent.enrolledCourses.find(c => c.courseId === courseId);
+
+    if (!course) {
+      return res.status(200).json({
+        resume: {
+          lastWatched: null,
+          watchedHours: 0,
+          progressPercent: 0,
+          progress: false,
+          isCompleted: false
+        }
+      });
+    }
+
+    const resume = {
+      lastWatched: course.lastWatched || null,
+      watchedHours: course.watchedHours || 0,
+      progressPercent: course.progressPercent || 0,
+      progress: course.progress || false,
+      isCompleted: course.isCompleted || false
+    };
+
+    res.status(200).json({ resume });
+
+  } catch (err) {
+    next(err); 
+  }
+};
+
+// ✅ Update Resume Progress and Last Watched
+export const updateCourseResume = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { courseId } = req.params;
+    const { lastWatched = {}, watchedHours = 0 } = req.body;
+
+    let courseStudent = await CourseStudent.findOne({ userId });
+
+    if (!courseStudent) {
+      courseStudent = new CourseStudent({
+        userId,
+        enrolledCourses: []
+      });
+    }
+
+    let course = courseStudent.enrolledCourses.find(c => c.courseId === courseId);
+
+    if (!course) {
+      course = {
+        courseId,
+        watchedHours: 0,
+        progressPercent: 0,
+        progress: false,
+        isCompleted: false,
+        lastWatched: {}
+      };
+      courseStudent.enrolledCourses.push(course);
+    }
+
+    course.watchedHours = watchedHours;
+    course.lastWatched = {
+      moduleIndex: lastWatched.moduleIndex || 0,
+      topicIndex: lastWatched.topicIndex || 0,
+      contentIndex: lastWatched.contentIndex || 0
+    };
+
+    const courseDetails = await Course.findById(courseId);
+    const totalHours = courseDetails?.totalHours || 1;
+
+    course.progressPercent = Math.min(100, Math.round((watchedHours / totalHours) * 100));
+    course.progress = course.progressPercent > 0;
+    course.isCompleted = watchedHours >= totalHours;
+
+    if (typeof courseStudent.updateGlobalProgress === "function") {
+      courseStudent.updateGlobalProgress();
+    }
+
+    await courseStudent.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Resume updated",
+      resume: course.lastWatched
+    });
+
+  } catch (err) {
+    next(err); 
+  }
+};
 
 
 // ✅ Update watched progress
