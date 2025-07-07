@@ -1,22 +1,21 @@
-
 import express from "express";
 import {
-  getAllCourseStudents,
   createCourseStudent,
+  getAllCourseStudents,
+  getPurchasedEnrolledCourseDetailsByUser,
   updateCourseStudent,
   deleteCourseStudent,
-  updateProgress,
-  getCourseStudentCourseDetails
+  updateProgress
 } from "../controllers/courseStudentController.js";
-
-
+import { isAdmin, verifyUser } from "../middleware/auth.js";
 const courseStudentRouter = express.Router();
-
-courseStudentRouter.get("/getCourseDetails", getAllCourseStudents);
-courseStudentRouter.get("/:courseId", getCourseStudentCourseDetails);
-courseStudentRouter.post("/create", createCourseStudent);
-courseStudentRouter.put("/:id", updateCourseStudent);
-courseStudentRouter.delete("/:id", deleteCourseStudent);
-courseStudentRouter.patch("/:id/progress", updateProgress); 
+courseStudentRouter.get("/all", isAdmin, getAllCourseStudents);
+courseStudentRouter.get("/getCourseByUser", verifyUser, getPurchasedEnrolledCourseDetailsByUser);
+courseStudentRouter.post("/create", verifyUser, createCourseStudent);
+courseStudentRouter.put("/:id", isAdmin, updateCourseStudent);
+courseStudentRouter.patch("/:id/progress", verifyUser, updateProgress);
+courseStudentRouter.delete("/:id", isAdmin, deleteCourseStudent);
+courseStudentRouter.delete("/:id", isAdmin, deleteCourseStudent);
 
 export default courseStudentRouter;
+

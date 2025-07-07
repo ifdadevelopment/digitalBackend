@@ -1,18 +1,53 @@
 import mongoose from "mongoose";
-
-const paymentSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-  courseIds: [{ type: mongoose.Schema.Types.ObjectId, ref: "Course" }],
-  razorpay_order_id: { type: String, required: true },
-  razorpay_payment_id: { type: String, required: true },
-  amountPaid: { type: Number, required: true },
-  paymentMethod: { 
-    type: String, 
-    enum: ["UPI", "Credit Card", "Netbanking", "Wallet", "Other"], 
-    required: true 
+const PaymentTempSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "User",
+    },
+    cartItems: [
+      {
+        courseId: String,
+        title: String,
+        price: Number,
+        salePrice: Number,
+        image: String,
+      },
+    ],
+    razorpay_order_id: {
+      type: String,
+      required: true,
+    },
+    amount: {
+      type: Number,
+      required: true,
+    },
   },
-  createdAt: { type: Date, default: Date.now },
-});
+  { timestamps: true }
+);
+const PaymentSchema = new mongoose.Schema(
+  {
+    user: {
+      name: String,
+      email: String,
+    },
+    cartItems: [
+      {
+        courseId: String,
+        title: String,
+        price: Number,
+        salePrice: Number,
+        image: String, 
+      },
+    ],
+    razorpay_order_id: String,
+    razorpay_payment_id: String,
+    amountPaid: Number,
+    paymentMethod: String,
+  },
+  { timestamps: true }
+);
 
-const Payment = mongoose.model("Payment", paymentSchema);
-export default Payment;
+export const PaymentTemp = mongoose.model("PaymentTemp", PaymentTempSchema);
+export default mongoose.model("Payment", PaymentSchema);
