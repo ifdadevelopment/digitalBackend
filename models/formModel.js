@@ -40,5 +40,5 @@ const formModelSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-const FormModel = mongoose.model("FormModel", formModelSchema);
+const FormModel = mongoose.model("Form", formModelSchema);
 export default FormModel;
