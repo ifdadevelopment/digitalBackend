@@ -74,39 +74,48 @@ export const loginUser = async (req, res, next) => {
 };
 
 
-export const updateUserProfile = async (req, res, next) => {
-  const userId = req.user._id;
-  const { name, phone, address, profileImage, linkedin, facebook, instagram, password, confirmPassword } = req.body;
-
+export const updateUserProfile = async (req, res) => {
   try {
-    const user = await userModel.findById(userId).select("+password");
-    if (!user)
-      return next(errorHandler(404, "User not found"));
+    const { oldPassword, newPassword, confirmNewPassword, ...otherData } = req.body;
 
-    if (name) user.name = name;
-    if (phone) user.phone = phone;
-    if (address) user.address = address;
-    if (linkedin) user.linkedin = linkedin;
-    if (facebook) user.facebook = facebook;
-    if (instagram) user.instagram = instagram;
-    if (profileImage) user.profileImage = profileImage;
-
-    if (password || confirmPassword) {
-      if (password !== confirmPassword)
-        return next(errorHandler(400, "Passwords do not match"));
-      if (!password || password.length < 8)
-        return next(errorHandler(400, "Password must be at least 8 characters"));
-      const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(password, salt);
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized access" });
     }
 
+    const user = await userModel.findById(req.user.id).select("+password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (oldPassword || newPassword || confirmNewPassword) {
+      if (!oldPassword || !newPassword || !confirmNewPassword) {
+        return res.status(400).json({ message: "All password fields are required" });
+      }
+
+      const isMatch = await user.comparePassword(oldPassword);
+      if (!isMatch) {
+        return res.status(400).json({ message: "Old password is incorrect" });
+      }
+
+      if (newPassword !== confirmNewPassword) {
+        return res.status(400).json({ message: "New password and confirm password do not match" });
+      }
+
+      user.password = newPassword;
+    }
+
+    Object.assign(user, otherData);
     await user.save();
-    const updatedUser = await userModel.findById(userId).select("-password");
-    res.json({ success: true, message: "Profile updated successfully", user: updatedUser });
+
+    const { password, ...safeUser } = user.toObject();
+    res.status(200).json({ success: true, user: safeUser, message: "Profile updated successfully" });
+
   } catch (error) {
-    next(errorHandler(500, "Error updating profile"));
+    console.error("Update error:", error);
+    res.status(500).json({ message: "Something went wrong" });
   }
 };
+
+
 export const logoutUser = async (req, res, next) => {
   try {
     const isProduction = process.env.NODE_ENV === "production";
