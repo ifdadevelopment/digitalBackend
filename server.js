@@ -12,8 +12,6 @@ import blogRouter from "./routes/blogRoutes.js";
 import cartRouter from "./routes/cartRoutes.js";
 import uploadRouter from "./routes/uploadRoutes.js";
 
-// import { v2 as cloudinary } from "cloudinary";
-
 // app config
 const app = express();
 const PORT = process.env.PORT || 5000;
