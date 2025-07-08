@@ -2,14 +2,12 @@ import AWS from "aws-sdk";
 import fs from "fs";
 import { Upload } from "../models/Upload.js";
 
-// Configure AWS S3
 const s3 = new AWS.S3({
   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   region: process.env.AWS_REGION,
 });
 
-// ✅ Direct upload (≤ 20MB)
 export const uploadSingle = async (req, res) => {
   try {
     const { fileId, fileName } = req.body;
@@ -26,7 +24,7 @@ export const uploadSingle = async (req, res) => {
       })
       .promise();
 
-    fs.unlinkSync(file.path); // delete temp file
+    fs.unlinkSync(file.path); 
 
     const upload = new Upload({
       fileId,
@@ -49,7 +47,6 @@ export const uploadSingle = async (req, res) => {
   }
 };
 
-// ✅ Chunked multipart upload (≥ 20MB)
 export const uploadChunk = async (req, res) => {
   try {
     const { fileId, fileName, chunkIndex, totalChunks } = req.body;
@@ -90,7 +87,7 @@ export const uploadChunk = async (req, res) => {
       })
       .promise();
 
-    fs.unlinkSync(chunk.path); // cleanup
+    fs.unlinkSync(chunk.path);
 
     upload.parts[chunkIndex] = {
       PartNumber: partNum,
@@ -105,8 +102,6 @@ export const uploadChunk = async (req, res) => {
     res.status(500).json({ error: "Chunk upload failed" });
   }
 };
-
-// ✅ Complete multipart upload
 export const completeUpload = async (req, res) => {
   try {
     const { fileId } = req.body;
