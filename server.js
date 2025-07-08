@@ -10,6 +10,8 @@ import paymentRouter from "./routes/paymentRoute.js";
 import courseStudentRouter from "./routes/courseStudentRoutes.js";
 import blogRouter from "./routes/blogRoutes.js";
 import cartRouter from "./routes/cartRoutes.js";
+import uploadRouter from "./routes/uploadRoutes.js";
+
 // import { v2 as cloudinary } from "cloudinary";
 
 // app config
@@ -54,7 +56,7 @@ app.use("/api/payment", paymentRouter);
 app.use("/api/courseStudent", courseStudentRouter);
 app.use("/api/blogs", blogRouter);
 app.use("/api/carts", cartRouter);
-
+app.use("/api/upload", uploadRouter);
 
 
 // cloudinary.config({
