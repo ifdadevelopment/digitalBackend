@@ -131,12 +131,26 @@ const progressPercentage =
 };
 
 // ✅ Get all students (Admin)
-export const getAllCourseStudents = async (req, res, next) => {
+export const getAllEnrolledCourses = async (req, res, next) => {
   try {
     const students = await CourseStudent.find();
-    res.status(200).json(students);
+    const allEnrolledCourses = students.flatMap(student => student.enrolledCourses.map(course => ({
+      userId: student.userId,
+      ...course.toObject(), 
+    })));
+
+    res.status(200).json({
+      success: true,
+      totalEnrolledCourses: allEnrolledCourses.length,
+      enrolledCourses: allEnrolledCourses,
+    });
   } catch (err) {
-    next(err);
+    console.error("Error fetching enrolled courses:", err);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch enrolled courses",
+      error: err.message,
+    });
   }
 };
 

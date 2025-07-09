@@ -145,3 +145,22 @@ export const getPaymentsByUser = async (req, res) => {
     res.status(500).json({ success: false, message: "Fetch failed", error: err.message });
   }
 };
+// get all payment details for admin 
+
+export const getAllSuccessfulPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: payments.length,
+      payments,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch successful payments",
+      error: error.message,
+    });
+  }
+};

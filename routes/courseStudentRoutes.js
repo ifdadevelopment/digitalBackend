@@ -1,7 +1,7 @@
 import express from "express";
 import {
   createCourseStudent,
-  getAllCourseStudents,
+  getAllEnrolledCourses,
   getPurchasedEnrolledCourseDetailsByUser,
   updateCourseStudent,
   deleteCourseStudent,
@@ -11,7 +11,7 @@ import {
 } from "../controllers/courseStudentController.js";
 import { isAdmin, verifyUser } from "../middleware/auth.js";
 const courseStudentRouter = express.Router();
-courseStudentRouter.get("/all", isAdmin, getAllCourseStudents);
+courseStudentRouter.get("/all", isAdmin, getAllEnrolledCourses);
 courseStudentRouter.get("/getCourseByUser", verifyUser, getPurchasedEnrolledCourseDetailsByUser);
 courseStudentRouter.post("/create", verifyUser, createCourseStudent);
 courseStudentRouter.get("/:courseId", verifyUser, getCourseResume);

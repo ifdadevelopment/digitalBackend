@@ -65,25 +65,32 @@ export const createCourse = async (req, res) => {
 export const getAllCourses = async (req, res) => {
   try {
     const { type, search, category } = req.query;
-    const filter = {};
 
+    const filter = {};
     if (type) {
       filter.type = type;
     }
-
     if (category) {
       filter.category = new RegExp(category, "i");
     }
-
     if (search) {
       filter.title = new RegExp(search, "i");
     }
 
-    const courses = await Course.find(filter);
-    res.json({ success: true, count: courses.length, courses });
+    const courses = await Course.find(filter).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: courses.length,
+      courses,
+    });
   } catch (error) {
     console.error("Error fetching courses:", error);
-    res.status(500).json({ success: false, message: "Failed to fetch courses" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch courses",
+      error: error.message,
+    });
   }
 };
 
