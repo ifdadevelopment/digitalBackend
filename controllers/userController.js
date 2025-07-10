@@ -162,11 +162,12 @@ export const logoutUser = async (req, res, next) => {
 // Get all user  details for admin 
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await userModel.find().select("-password"); 
+    const users = await userModel.find().select("-password");
+
     res.status(200).json({
       success: true,
-      count: users.length,
       users,
+      totalUsers: users.length,
     });
   } catch (err) {
     res.status(500).json({

@@ -18,7 +18,6 @@ const courseSchema = new mongoose.Schema(
     image: { type: String },
     reviewsCount: { type: Number, default: 0 },
     studentsEnrolled: { type: Number, default: 0 },
-    lastUpdated: { type: String },
     category: { type: String },
     type: {
       type: String,

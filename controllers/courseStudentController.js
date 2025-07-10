@@ -4,7 +4,7 @@ import CourseStudent from "../models/CourseStudentModel.js";
 import Payment from "../models/PaymentModel.js";
 import userModel from "../models/UserModel.js";
 
-// ✅ Create course enrollment (after payment)
+// ✅ Create course enrollment 
 export const createCourseStudent = async (req, res, next) => {
   try {
     const {
@@ -133,26 +133,57 @@ const progressPercentage =
 // ✅ Get all students (Admin)
 export const getAllEnrolledCourses = async (req, res, next) => {
   try {
-    const students = await CourseStudent.find();
-    const allEnrolledCourses = students.flatMap(student => student.enrolledCourses.map(course => ({
-      userId: student.userId,
-      ...course.toObject(), 
-    })));
+    const students = await CourseStudent.find().populate();
 
-    res.status(200).json({
+    let totalEnrolledCourses = 0;
+    let totalEnrolledUsers = 0;
+    const enrolledCourses = [];
+    const uniqueCourseIds = new Set();
+
+    for (const student of students) {
+      const courses = Array.isArray(student.enrolledCourses)
+        ? student.enrolledCourses
+        : [];
+
+      if (courses.length > 0) {
+        totalEnrolledUsers += 1;
+      }
+
+      totalEnrolledCourses += courses.length;
+
+      for (const course of courses) {
+        const courseObj = typeof course.toObject === "function" ? course.toObject() : course;
+
+        if (courseObj.courseId) {
+          uniqueCourseIds.add(courseObj.courseId.toString()); 
+        }
+
+        enrolledCourses.push({
+          userId: student.userId,
+          ...courseObj,
+        });
+      }
+    }
+
+    return res.status(200).json({
       success: true,
-      totalEnrolledCourses: allEnrolledCourses.length,
-      enrolledCourses: allEnrolledCourses,
+      summary: {
+        totalEnrolledUsers,
+        totalEnrolledCourses,
+        totalUniqueCourses: uniqueCourseIds.size,
+      },
+      enrolledCourses,
     });
   } catch (err) {
-    console.error("Error fetching enrolled courses:", err);
-    res.status(500).json({
-      success: false,
+    console.error("Failed to fetch enrolled courses:", err);
+    next({
+      statusCode: 500,
       message: "Failed to fetch enrolled courses",
       error: err.message,
     });
   }
 };
+
 
 // ✅ Get all or specific enrolled course (must be purchased)
 

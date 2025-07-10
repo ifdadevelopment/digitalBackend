@@ -1,22 +1,25 @@
 import Course from "../models/CourseModel.js";
-
 import { v4 as uuidv4 } from "uuid";
 
-export const createCourse = async (req, res) => {
+// CREATE COURSE
+export const createCourse = async (req, res, next) => {
   try {
     const data = req.body;
+
     if (!data.title || !data.type) {
       return res.status(400).json({
         success: false,
         message: "'title' and 'type' fields are required.",
       });
     }
+
     if (!["Student", "Business"].includes(data.type)) {
       return res.status(400).json({
         success: false,
         message: "Invalid course type. Must be 'Student' or 'Business'.",
       });
     }
+
     const existing = await Course.findOne({ title: data.title, type: data.type });
     if (existing) {
       return res.status(409).json({
@@ -24,7 +27,10 @@ export const createCourse = async (req, res) => {
         message: `A ${data.type.toLowerCase()} course with this title already exists.`,
       });
     }
+
     data.courseId = uuidv4();
+
+    // Cleanup based on course type
     if (data.type === "Business") {
       delete data.previewVideo;
       delete data.whatYouWillLearn;
@@ -52,30 +58,19 @@ export const createCourse = async (req, res) => {
         key: error.keyValue,
       });
     }
-
-    console.error("Create course error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to create course.",
-      error: error.message,
-    });
+    next(error);
   }
 };
 
-export const getAllCourses = async (req, res) => {
+// GET ALL COURSES
+export const getAllCourses = async (req, res, next) => {
   try {
     const { type, search, category } = req.query;
-
     const filter = {};
-    if (type) {
-      filter.type = type;
-    }
-    if (category) {
-      filter.category = new RegExp(category, "i");
-    }
-    if (search) {
-      filter.title = new RegExp(search, "i");
-    }
+
+    if (type) filter.type = type;
+    if (category) filter.category = new RegExp(category, "i");
+    if (search) filter.title = new RegExp(search, "i");
 
     const courses = await Course.find(filter).sort({ createdAt: -1 });
 
@@ -85,40 +80,40 @@ export const getAllCourses = async (req, res) => {
       courses,
     });
   } catch (error) {
-    console.error("Error fetching courses:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch courses",
-      error: error.message,
-    });
+    next(error);
   }
 };
 
-
-export const getCourseById = async (req, res) => {
+// GET COURSE BY ID
+export const getCourseById = async (req, res, next) => {
   try {
     const { courseId } = req.params;
-    const course = await Course.findOne({ courseId, type: "Student" });
+
+    let course = await Course.findOne({ courseId, type: "Student" });
+
+    if (!course) {
+      course = await Course.findOne({ courseId, type: "Business" });
+    }
 
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: "Course not found or not a Student type course",
+        message: "Course not found",
       });
     }
 
-    return res.status(200).json({ success: true, course });
-  } catch (error) {
-    console.error("Error fetching course:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Failed to fetch course",
+    res.status(200).json({
+      success: true,
+      course,
+      courseType: course.type,
     });
+  } catch (error) {
+    next(error);
   }
 };
 
-
-export const deleteCourse = async (req, res) => {
+// DELETE COURSE
+export const deleteCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -128,15 +123,17 @@ export const deleteCourse = async (req, res) => {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
 
-    res.status(200).json({ success: true, message: "Course deleted successfully" });
+    res.status(200).json({
+      success: true,
+      message: "Course deleted successfully",
+    });
   } catch (error) {
-    console.error("Error deleting course:", error);
-    res.status(500).json({ success: false, message: "Failed to delete course" });
+    next(error);
   }
 };
 
-
-export const editCourse = async (req, res) => {
+// UPDATE COURSE
+export const editCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
     const updateFields = req.body;
@@ -148,16 +145,18 @@ export const editCourse = async (req, res) => {
     );
 
     if (!updatedCourse) {
-      return res.status(404).json({ success: false, message: "Course not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Course not found",
+      });
     }
 
-    res.json({
+    res.status(200).json({
       success: true,
       message: "Course updated successfully",
       course: updatedCourse,
     });
   } catch (error) {
-    console.error("Error updating course:", error);
-    res.status(500).json({ success: false, message: "Failed to update course" });
+    next(error);
   }
 };

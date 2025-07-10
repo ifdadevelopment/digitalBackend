@@ -145,18 +145,37 @@ export const getPaymentsByUser = async (req, res) => {
     res.status(500).json({ success: false, message: "Fetch failed", error: err.message });
   }
 };
+
 // get all payment details for admin 
+
 
 export const getAllSuccessfulPayments = async (req, res) => {
   try {
     const payments = await Payment.find().sort({ createdAt: -1 });
 
+    const enrichedPayments = payments.map((payment, index) => {
+      return payment.cartItems.map((item) => ({
+        slNo: index + 1,
+        userName: payment.user?.name || "N/A",
+        courseTitle: item.title || "N/A",
+        courseImage: item.image || "",
+        orderId: payment.razorpay_order_id || "",
+        amount: payment.amountPaid || 0,
+        method: payment.paymentMethod || "Unknown",
+        createdAt: payment.createdAt,
+      }));
+    });
+
+    // Flatten array (since cartItems is an array per payment)
+    const flatPayments = enrichedPayments.flat();
+
     res.status(200).json({
       success: true,
-      count: payments.length,
-      payments,
+      count: flatPayments.length,
+      payments: flatPayments,
     });
   } catch (error) {
+    console.error("Error fetching payments:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch successful payments",
