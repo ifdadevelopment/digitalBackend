@@ -136,18 +136,49 @@ export const deleteCourse = async (req, res, next) => {
 export const editCourse = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const updateFields = req.body;
 
+    const updateFields = { ...req.body };
+    const arrayFields = ["whatYouWillLearn", "topics", "includes", "requirements"];
+    arrayFields.forEach((key) => {
+      if (typeof updateFields[key] === "string") {
+        try {
+          updateFields[key] = JSON.parse(updateFields[key]);
+        } catch {
+          updateFields[key] = updateFields[key].split(",").map((item) => item.trim());
+        }
+      }
+    });
+    if (req.files) {
+      if (req.files.previewVideo?.[0]) {
+        updateFields.previewVideo = req.files.previewVideo[0].path;
+      }
+      if (req.files.downloadBrochure?.[0]) {
+        updateFields.downloadBrochure = req.files.downloadBrochure[0].path;
+      }
+      if (req.files.image?.[0]) {
+        updateFields.image = req.files.image[0].path;
+      }
+    }
+    if (updateFields.type === "Business") {
+      delete updateFields.previewVideo;
+      delete updateFields.whatYouWillLearn;
+      delete updateFields.price;
+      delete updateFields.salePrice;
+      delete updateFields.topics;
+      delete updateFields.requirements;
+    } else if (updateFields.type === "Student") {
+      delete updateFields.downloadBrochure;
+    }
     const updatedCourse = await Course.findOneAndUpdate(
       { courseId: id },
-      updateFields,
+      { $set: updateFields },
       { new: true, runValidators: true }
     );
 
     if (!updatedCourse) {
       return res.status(404).json({
         success: false,
-        message: "Course not found",
+        message: `Course not found with courseId: ${id}`,
       });
     }
 

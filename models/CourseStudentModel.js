@@ -15,6 +15,7 @@ const contentSchema = new mongoose.Schema({
   type: { type: String, enum: ['video', 'pdf', 'image', 'audio', 'test'], required: true },
   name: String,
   duration: String,
+  pages:String,
   url: String,
   completed: { type: Boolean, default: false },
   score: Number,
@@ -76,6 +77,7 @@ const enrolledCourseSchema = new mongoose.Schema({
   modules: [moduleSchema],
   finalTest: finalTestSchema,
 }, { _id: false });
+
 
 // Main Student Course Schema
 const courseStudentSchema = new mongoose.Schema({
