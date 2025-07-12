@@ -25,11 +25,85 @@ export const createCourseStudent = async (req, res, next) => {
         message: "Course not found or not a Student-type course"
       });
     }
-const safeTotalHours = Number(totalHours) || 0;
-const safeWatchedHours = Number(watchedHours) || 0;
 
-const progressPercentage =
-  safeTotalHours > 0 ? (safeWatchedHours / safeTotalHours) * 100 : 0;
+    const safeTotalHours = Number(totalHours) || 0;
+    const safeWatchedHours = Number(watchedHours) || 0;
+
+    const progressPercentage =
+      safeTotalHours > 0 ? (safeWatchedHours / safeTotalHours) * 100 : 0;
+    let totalAssessments = 0;
+    let totalAssignments = 0;
+
+    const parsedModules = Array.isArray(modules)
+      ? modules.map((mod) => {
+          return {
+            moduleTitle: mod.moduleTitle,
+            description: mod.description,
+            completed: mod.completed || false,
+            topics: Array.isArray(mod.topics)
+              ? mod.topics.map((topic) => {
+                  return {
+                    topicId: uuidv4(),
+                    topicTitle: topic.topicTitle,
+                    completed: topic.completed || false,
+                    contents: Array.isArray(topic.contents)
+                      ? topic.contents.map((content) => {
+                          totalAssessments++; 
+                          const contentQuestions = Array.isArray(content.questions)
+                            ? content.questions.map((q) => ({
+                                question: q.question,
+                                options: q.options,
+                                answer: q.answer,
+                                selectedAnswer: q.selectedAnswer || "",
+                                isCorrect: q.isCorrect || false
+                              }))
+                            : [];
+
+                          totalAssignments += contentQuestions.length;
+
+                          return {
+                            type: content.type,
+                            name: content.name,
+                            duration: content.duration,
+                            url: content.url,
+                            completed: content.completed || false,
+                            score: content.score || 0,
+                            questions: contentQuestions
+                          };
+                        })
+                      : []
+                  };
+                })
+              : []
+          };
+        })
+      : [];
+    const finalTestData = finalTest
+      ? {
+          name: finalTest.name || "",
+          type: "test",
+          completed: finalTest.completed || false,
+          score: finalTest.score || 0,
+          questions: Array.isArray(finalTest.questions)
+            ? finalTest.questions.map((q) => ({
+                question: q.question,
+                options: q.options,
+                answer: q.answer,
+                selectedAnswer: q.selectedAnswer || "",
+                isCorrect: q.isCorrect || false
+              }))
+            : []
+        }
+      : {
+          name: "",
+          type: "test",
+          completed: false,
+          score: 0,
+          questions: []
+        };
+
+    const totalFinalQuestions = finalTestData.questions.length;
+
     const enrolledCourse = {
       courseId: course.courseId,
       title: course.title,
@@ -37,68 +111,17 @@ const progressPercentage =
       previewVideo: course.previewVideo,
       badge: badge || "",
       level: level || "Beginner",
-      tags: tags || [],
-    totalHours: safeTotalHours,
-  watchedHours: safeWatchedHours,
-      modules: Array.isArray(modules)
-        ? modules.map((mod) => ({
-            moduleTitle: mod.moduleTitle,
-            description: mod.description,
-            completed: mod.completed || false,
-            topics: Array.isArray(mod.topics)
-              ? mod.topics.map((topic) => ({
-                  topicId: uuidv4(),
-                  topicTitle: topic.topicTitle,
-                  completed: topic.completed || false,
-                  contents: Array.isArray(topic.contents)
-                    ? topic.contents.map((content) => ({
-                        type: content.type,
-                        name: content.name,
-                        duration: content.duration,
-                        url: content.url,
-                        completed: content.completed || false,
-                        score: content.score || 0,
-                        questions: Array.isArray(content.questions)
-                          ? content.questions.map((q) => ({
-                              question: q.question,
-                              options: q.options,
-                              answer: q.answer,
-                              selectedAnswer: q.selectedAnswer || "",
-                              isCorrect: q.isCorrect || false
-                            }))
-                          : []
-                      }))
-                    : []
-                }))
-              : []
-          }))
-        : [],
-      finalTest: finalTest
-        ? {
-            name: finalTest.name || "",
-            type: "test",
-            completed: finalTest.completed || false,
-            score: finalTest.score || 0,
-            questions: Array.isArray(finalTest.questions)
-              ? finalTest.questions.map((q) => ({
-                  question: q.question,
-                  options: q.options,
-                  answer: q.answer,
-                  selectedAnswer: q.selectedAnswer || "",
-                  isCorrect: q.isCorrect || false
-                }))
-              : []
-          }
-        : {
-            name: "",
-            type: "test",
-            completed: false,
-            score: 0,
-            questions: []
-          },
+      tags: Array.isArray(tags) ? tags : [],
+      totalHours: safeTotalHours,
+      watchedHours: safeWatchedHours,
+      assessments: totalAssessments,
+      assignments: totalAssignments,
+      questions: totalFinalQuestions,
+      modules: parsedModules,
+      finalTest: finalTestData,
       progress: false,
       progressPercentage,
-       isCompleted: safeWatchedHours === safeTotalHours && safeTotalHours > 0,
+      isCompleted: safeWatchedHours === safeTotalHours && safeTotalHours > 0,
       startedAt: new Date()
     };
 
@@ -126,9 +149,10 @@ const progressPercentage =
     return res.status(201).json(saved);
   } catch (error) {
     console.error("Create course student error:", error);
-    next(error); 
+    next(error);
   }
 };
+
 
 // ✅ Get all students (Admin)
 export const getAllEnrolledCourses = async (req, res, next) => {

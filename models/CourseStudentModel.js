@@ -4,11 +4,33 @@ import { v4 as uuidv4 } from 'uuid';
 // Question Schema
 const questionSchema = new mongoose.Schema({
   question: { type: String, required: true },
-  options: [String],
-  answer: { type: String, required: true },
-  selectedAnswer: String,
-  isCorrect: Boolean,
+  options: {
+    type: [String],
+    required: true,
+    validate: [arrayMinLength, 'At least one option is required.']
+  },
+  answer: {
+    type: mongoose.Schema.Types.Mixed,
+    required: true
+  },
+  selectedAnswer: {
+    type: mongoose.Schema.Types.Mixed, 
+  },
+  multiSelect: {
+    type: Boolean,
+    default: false
+  },
+  isCorrect: {
+    type: Boolean,
+    default: false
+  }
 }, { _id: false });
+
+// Custom validator for options array
+function arrayMinLength(val) {
+  return Array.isArray(val) && val.length >= 1;
+}
+
 
 // Content Schema
 const contentSchema = new mongoose.Schema({
@@ -57,9 +79,11 @@ const enrolledCourseSchema = new mongoose.Schema({
   badge: String,
   level: String,
   tags: [String],
-
   totalHours: Number,
   watchedHours: { type: Number, default: 0 },
+  assessments:Number,
+  assignments:Number,
+  questions:Number,
 
   progress: { type: Boolean, default: false },
   progressPercent: { type: Number, default: 0 },
