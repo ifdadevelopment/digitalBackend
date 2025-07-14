@@ -115,9 +115,9 @@ export const getCourseById = async (req, res, next) => {
 // DELETE COURSE
 export const deleteCourse = async (req, res, next) => {
   try {
-    const { id } = req.params;
+    const { courseId } = req.params;
 
-    const deleted = await Course.findOneAndDelete({ courseId: id });
+    const deleted = await Course.findOneAndDelete({ courseId });
 
     if (!deleted) {
       return res.status(404).json({ success: false, message: "Course not found" });

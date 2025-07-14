@@ -17,7 +17,7 @@ courseStudentRouter.post("/create", verifyUser, createCourseStudent);
 courseStudentRouter.get("/:courseId", verifyUser, getCourseResume);
 courseStudentRouter.put("/:courseId", verifyUser, updateCourseResume);
 courseStudentRouter.put("/:id", isAdmin, updateCourseStudent);
-courseStudentRouter.patch("/:id/progress", verifyUser, updateProgress);
+courseStudentRouter.patch("/progress/:id", verifyUser, updateProgress);
 courseStudentRouter.delete("/:id", isAdmin, deleteCourseStudent);
 
 

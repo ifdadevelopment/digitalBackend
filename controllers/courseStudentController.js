@@ -157,6 +157,7 @@ export const createCourseStudent = async (req, res, next) => {
 // ✅ Get all students (Admin)
 export const getAllEnrolledCourses = async (req, res, next) => {
   try {
+    const { courseId } = req.query;
     const students = await CourseStudent.find().populate();
 
     let totalEnrolledCourses = 0;
@@ -168,18 +169,21 @@ export const getAllEnrolledCourses = async (req, res, next) => {
       const courses = Array.isArray(student.enrolledCourses)
         ? student.enrolledCourses
         : [];
+      const filteredCourses = courseId
+        ? courses.filter((c) => c.courseId?.toString() === courseId)
+        : courses;
 
-      if (courses.length > 0) {
+      if (filteredCourses.length > 0) {
         totalEnrolledUsers += 1;
       }
 
-      totalEnrolledCourses += courses.length;
+      totalEnrolledCourses += filteredCourses.length;
 
-      for (const course of courses) {
+      for (const course of filteredCourses) {
         const courseObj = typeof course.toObject === "function" ? course.toObject() : course;
 
         if (courseObj.courseId) {
-          uniqueCourseIds.add(courseObj.courseId.toString()); 
+          uniqueCourseIds.add(courseObj.courseId.toString());
         }
 
         enrolledCourses.push({
