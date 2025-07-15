@@ -10,7 +10,7 @@ import paymentRouter from "./routes/paymentRoute.js";
 import courseStudentRouter from "./routes/courseStudentRoutes.js";
 import blogRouter from "./routes/blogRoutes.js";
 import cartRouter from "./routes/cartRoutes.js";
-import uploadRouter from "./routes/uploadRoutes.js";
+
 
 // app config
 const app = express();
@@ -68,7 +68,7 @@ app.use("/api/payment", paymentRouter);
 app.use("/api/courseStudent", courseStudentRouter);
 app.use("/api/blogs", blogRouter);
 app.use("/api/carts", cartRouter);
-app.use("/api/upload", uploadRouter);
+
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
