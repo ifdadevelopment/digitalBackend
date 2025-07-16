@@ -7,30 +7,35 @@ export const createCourse = async (req, res, next) => {
     const data = req.body;
 
     if (!data.title || !data.type) {
-      return res.status(400).json({
-        success: false,
-        message: "'title' and 'type' fields are required.",
-      });
+      return res.status(400).json({ success: false, message: "'title' and 'type' fields are required." });
     }
 
     if (!["Student", "Business"].includes(data.type)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid course type. Must be 'Student' or 'Business'.",
-      });
+      return res.status(400).json({ success: false, message: "Invalid course type." });
     }
 
     const existing = await Course.findOne({ title: data.title, type: data.type });
     if (existing) {
-      return res.status(409).json({
-        success: false,
-        message: `A ${data.type.toLowerCase()} course with this title already exists.`,
-      });
+      return res.status(409).json({ success: false, message: "Course already exists." });
+    }
+
+    const parseArray = (field) =>
+      typeof data[field] === "string" ? JSON.parse(data[field]) : data[field];
+
+    ["whatYouWillLearn", "topics", "includes", "requirements"].forEach((field) => {
+      if (data[field]) {
+        data[field] = parseArray(field);
+      }
+    });
+    if (req.s3Uploads?.length) {
+      for (const file of req.s3Uploads) {
+        if (file.field === "image") data.image = file.url;
+        if (file.field === "previewVideo") data.previewVideo = file.url;
+        if (file.field === "downloadBrochure") data.downloadBrochure = file.url;
+      }
     }
 
     data.courseId = uuidv4();
-
-    // Cleanup based on course type
     if (data.type === "Business") {
       delete data.previewVideo;
       delete data.whatYouWillLearn;
@@ -43,24 +48,20 @@ export const createCourse = async (req, res, next) => {
     }
 
     const newCourse = new Course(data);
-    const savedCourse = await newCourse.save();
+    const saved = await newCourse.save();
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: "Course created successfully.",
-      data: savedCourse,
+      message: "Course created successfully",
+      data: saved,
     });
-  } catch (error) {
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Duplicate entry. A course with the same title and type already exists.",
-        key: error.keyValue,
-      });
-    }
-    next(error);
+  } catch (err) {
+    console.error("Create Course Error:", err);
+    return next(err);
   }
 };
+
+
 
 // GET ALL COURSES
 export const getAllCourses = async (req, res, next) => {
