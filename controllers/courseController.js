@@ -2,39 +2,65 @@ import Course from "../models/CourseModel.js";
 import { v4 as uuidv4 } from "uuid";
 
 // CREATE COURSE
-export const createCourse = async (req, res, next) => {
+export const createCourse = async (req, res) => {
   try {
-    const data = req.body;
-
+    const data = { ...req.body };
     if (!data.title || !data.type) {
-      return res.status(400).json({ success: false, message: "'title' and 'type' fields are required." });
+      return res.status(400).json({
+        success: false,
+        message: "'title' and 'type' fields are required.",
+      });
     }
 
     if (!["Student", "Business"].includes(data.type)) {
-      return res.status(400).json({ success: false, message: "Invalid course type." });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course type. Must be 'Student' or 'Business'.",
+      });
     }
 
-    const existing = await Course.findOne({ title: data.title, type: data.type });
-    if (existing) {
-      return res.status(409).json({ success: false, message: "Course already exists." });
+    const exists = await Course.findOne({ title: data.title, type: data.type });
+    if (exists) {
+      return res.status(409).json({
+        success: false,
+        message: "Course already exists.",
+      });
     }
+  const jsonFields = ["whatYouWillLearn", "topics", "includes", "requirements"];
+for (const field of jsonFields) {
+  if (data[field]) {
+    try {
+      const parsed = typeof data[field] === "string" ? JSON.parse(data[field]) : data[field];
 
-    const parseArray = (field) =>
-      typeof data[field] === "string" ? JSON.parse(data[field]) : data[field];
-
-    ["whatYouWillLearn", "topics", "includes", "requirements"].forEach((field) => {
-      if (data[field]) {
-        data[field] = parseArray(field);
+      if (Array.isArray(parsed)) {
+        data[field] = parsed;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid array format in '${field}'`,
+        });
       }
-    });
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid JSON in '${field}'`,
+      });
+    }
+  }
+}
+
     if (req.s3Uploads?.length) {
+      const fileMap = {};
       for (const file of req.s3Uploads) {
-        if (file.field === "image") data.image = file.url;
-        if (file.field === "previewVideo") data.previewVideo = file.url;
-        if (file.field === "downloadBrochure") data.downloadBrochure = file.url;
+        if (!fileMap[file.field]) fileMap[file.field] = [];
+        fileMap[file.field].push(file.url);
+      }
+
+      const singleFields = ["image", "previewVideo", "downloadBrochure"];
+      for (const [field, urls] of Object.entries(fileMap)) {
+        data[field] = singleFields.includes(field) && urls.length === 1 ? urls[0] : urls;
       }
     }
-
     data.courseId = uuidv4();
     if (data.type === "Business") {
       delete data.previewVideo;
@@ -46,7 +72,6 @@ export const createCourse = async (req, res, next) => {
     } else if (data.type === "Student") {
       delete data.downloadBrochure;
     }
-
     const newCourse = new Course(data);
     const saved = await newCourse.save();
 
@@ -55,13 +80,15 @@ export const createCourse = async (req, res, next) => {
       message: "Course created successfully",
       data: saved,
     });
+
   } catch (err) {
-    console.error("Create Course Error:", err);
-    return next(err);
+    console.error("❌ Create Course Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Server error",
+    });
   }
 };
-
-
 
 // GET ALL COURSES
 export const getAllCourses = async (req, res, next) => {

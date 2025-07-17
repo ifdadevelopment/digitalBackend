@@ -16,14 +16,7 @@ import cartRouter from "./routes/cartRoutes.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-//middleware
-app.use(express.json());
 
-app.use(fileUpload({ createParentPath: true }));
-
-app.use(express.static("public"));
-
-app.use(express.urlencoded({ extended: true }));
 
 const CLIENT_URL =
   process.env.NODE_ENV === "production"
@@ -70,6 +63,13 @@ app.use("/api/blogs", blogRouter);
 app.use("/api/carts", cartRouter);
 
 
+//middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.use(fileUpload({ createParentPath: true }));
+
+app.use(express.static("public"));
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";

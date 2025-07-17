@@ -43,7 +43,6 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
-// ✅ LOGIN USER (Supports both Admin & Student)
 export const loginUser = async (req, res, next) => {
   const { email, password } = req.body;
 
