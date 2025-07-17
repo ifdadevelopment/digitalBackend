@@ -1,11 +1,11 @@
 import multer from "multer";
-import multerS3 from "multer-s3";
-import { S3Client } from "@aws-sdk/client-s3";
+import fs from "fs/promises";
+import os from "os";
+import path from "path";
 import { v4 as uuidv4 } from "uuid";
-import dotenv from "dotenv";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-dotenv.config();
-
+// AWS S3 setup
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -14,62 +14,93 @@ const s3 = new S3Client({
   },
 });
 
-const MAX_FILE_SIZE = 4 * 1024 * 1024 * 1024;
-
-const upload = multer({
-  storage: multerS3({
-    s3,
-    bucket: process.env.AWS_BUCKET_NAME,
-    contentType: multerS3.AUTO_CONTENT_TYPE,
-    acl: "public-read",
-    key: (req, file, cb) => {
-      const folder = "uploads";
-      const fileKey = `${folder}/${uuidv4()}_${file.originalname}`;
-      cb(null, fileKey);
-    },
-  }),
-  limits: { fileSize: MAX_FILE_SIZE },
+// Multer disk storage setup
+const diskStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, os.tmpdir());
+  },
+  filename: (req, file, cb) => {
+    const safeName = file.originalname.replace(/\s+/g, "_");
+    cb(null, `${Date.now()}-${uuidv4()}-${safeName}`);
+  },
 });
 
-export const uploadCourseAssets = upload.fields([
-  { name: "image", maxCount: 1 },
-  { name: "previewVideo", maxCount: 1 },
-  { name: "downloadBrochure", maxCount: 1 },
-]);
-
-const generatePublicUrls = async (files) => {
-  const bucket = process.env.AWS_BUCKET_NAME;
-  const region = process.env.AWS_REGION;
-
-  return files.map((file) => {
-    const publicUrl = `https://${bucket}.s3.${region}.amazonaws.com/${file.key}`;
-    return {
-      field: file.fieldname,
-      key: file.key,
-      url: publicUrl,
-      originalName: file.originalname,
-      type: file.mimetype,
-      size: file.size,
-    };
+// Multer instance
+const createMulter = (maxFileSize = 100 * 1024 * 1024) =>
+  multer({
+    storage: diskStorage,
+    limits: { fileSize: maxFileSize },
   });
+
+// Use `.fields()` or `.any()` dynamically
+export const getUploadMiddleware = (fieldConfig = null) => {
+  const instance = createMulter();
+  return fieldConfig ? instance.fields(fieldConfig) : instance.any();
 };
 
-// === MIDDLEWARE: ADD PUBLIC URLs TO req.s3Uploads ===
+// Upload to S3 from disk
 export const extractS3Uploads = async (req, res, next) => {
+  const bucket = process.env.AWS_BUCKET_NAME;
+  const region = process.env.AWS_REGION;
+  const uploads = [];
+
+  const files = Array.isArray(req.files)
+    ? req.files
+    : Object.values(req.files || {}).flat();
+
+  if (!files.length) {
+    console.log("⚠️ No files received.");
+    return next();
+  }
+
   try {
-    const allFiles = Object.values(req.files || {}).flat();
-    if (!allFiles.length) {
-      req.s3Uploads = [];
-      return next();
+    for (const file of files) {
+      const ext = path.extname(file.originalname).slice(1);
+      const baseName = path
+        .basename(file.originalname, path.extname(file.originalname))
+        .replace(/\s+/g, "_")
+        .replace(/[^a-zA-Z0-9_-]/g, "");
+
+      let folder = "courses/others";
+      if (file.fieldname === "image") folder = "courses/images";
+      else if (file.fieldname === "profileImage")
+        folder = "users/profile-images";
+      else if (file.fieldname === "previewVideo") folder = "courses/previews";
+      else if (file.fieldname === "downloadBrochure")
+        folder = "courses/brochures";
+
+      const key = `${folder}/${Date.now()}-${uuidv4()}-${baseName}.${ext}`;
+      const fileBuffer = await fs.readFile(file.path);
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: fileBuffer,
+          ContentType: file.mimetype,
+          ACL: "public-read",
+        })
+      );
+
+      uploads.push({
+        field: file.fieldname,
+        url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
+        key,
+        originalName: file.originalname,
+        type: file.mimetype,
+        size: file.size,
+      });
+
+      await fs.unlink(file.path);
     }
 
-    req.s3Uploads = await generatePublicUrls(allFiles);
+    req.s3Uploads = uploads;
     next();
   } catch (err) {
-    console.error("S3 Upload Extraction Error:", err);
-    res.status(500).json({
+    console.error("❌ S3 Upload Error:", err);
+    return res.status(500).json({
       success: false,
-      message: "Failed to process uploaded files",
+      message: "S3 upload failed",
       error: err.message,
     });
   }

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { errorHandler } from "../utils/error.js";
+import { deleteS3File } from "../utils/deleteS3File.js";
 
 const createToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -96,7 +97,7 @@ export const getUserProfile = async (req, res, next) => {
   }
 };
 
-// ✅ UPDATE USER PROFILE
+// ✅ UPDATE USER PROFILE WITH IMAGE SUPPORT
 export const updateUserProfile = async (req, res) => {
   try {
     const { oldPassword, newPassword, confirmNewPassword, ...otherData } = req.body;
@@ -108,6 +109,7 @@ export const updateUserProfile = async (req, res) => {
     const user = await userModel.findById(req.user.id).select("+password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
+    // ✅ Handle password update
     if (oldPassword || newPassword || confirmNewPassword) {
       if (!oldPassword || !newPassword || !confirmNewPassword) {
         return res.status(400).json({ message: "All password fields are required" });
@@ -125,7 +127,26 @@ export const updateUserProfile = async (req, res) => {
       user.password = newPassword;
     }
 
+    // ✅ Handle new uploaded profile image (req.s3Uploads)
+    if (req.s3Uploads?.length) {
+      const profileUpload = req.s3Uploads.find(file => file.field === "profileImage");
+      if (profileUpload) {
+        // Delete previous image if exists
+        if (user.profileImage) {
+          try {
+            await deleteS3File(user.profileImage);
+          } catch (err) {
+            console.warn("Failed to delete previous profile image from S3:", err.message);
+          }
+        }
+
+        user.profileImage = profileUpload.url;
+      }
+    }
+
+    // ✅ Update other fields
     Object.assign(user, otherData);
+
     await user.save();
 
     const { password, ...safeUser } = user.toObject();
@@ -140,6 +161,7 @@ export const updateUserProfile = async (req, res) => {
     res.status(500).json({ message: "Something went wrong" });
   }
 };
+
 
 // ✅ LOGOUT
 export const logoutUser = async (req, res, next) => {

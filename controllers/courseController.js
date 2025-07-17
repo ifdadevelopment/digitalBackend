@@ -1,40 +1,81 @@
 import Course from "../models/CourseModel.js";
 import { v4 as uuidv4 } from "uuid";
+import { deleteS3File } from "../utils/deleteS3File.js";
 
 // CREATE COURSE
-export const createCourse = async (req, res, next) => {
+export const createCourse = async (req, res) => {
   try {
-    const data = req.body;
-
+    const data = { ...req.body };
     if (!data.title || !data.type) {
-      return res.status(400).json({ success: false, message: "'title' and 'type' fields are required." });
+      return res.status(400).json({
+        success: false,
+        message: "'title' and 'type' fields are required.",
+      });
     }
 
     if (!["Student", "Business"].includes(data.type)) {
-      return res.status(400).json({ success: false, message: "Invalid course type." });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid course type. Must be 'Student' or 'Business'.",
+      });
     }
 
-    const existing = await Course.findOne({ title: data.title, type: data.type });
-    if (existing) {
-      return res.status(409).json({ success: false, message: "Course already exists." });
+    const exists = await Course.findOne({ title: data.title, type: data.type });
+    if (exists) {
+      return res.status(409).json({
+        success: false,
+        message: "Course already exists.",
+      });
     }
-
-    const parseArray = (field) =>
-      typeof data[field] === "string" ? JSON.parse(data[field]) : data[field];
-
-    ["whatYouWillLearn", "topics", "includes", "requirements"].forEach((field) => {
-      if (data[field]) {
-        data[field] = parseArray(field);
+const jsonFields = ["whatYouWillLearn", "topics", "includes", "requirements"];
+for (const field of jsonFields) {
+  if (data[field]) {
+    try {
+      if (typeof data[field] === "string") {
+        try {
+          const parsed = JSON.parse(data[field]);
+          if (Array.isArray(parsed)) {
+            data[field] = parsed;
+            continue;
+          } else {
+            return res.status(400).json({
+              success: false,
+              message: `Invalid array format in '${field}'`,
+            });
+          }
+        } catch {
+          // Fallback to custom parser
+          const parsed = customSplit(data[field]);
+          data[field] = parsed;
+        }
+      } else if (Array.isArray(data[field])) {
+        continue;
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid array format in '${field}'`,
+        });
       }
-    });
+    } catch (err) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid data in '${field}'`,
+      });
+    }
+  }
+}
     if (req.s3Uploads?.length) {
+      const fileMap = {};
       for (const file of req.s3Uploads) {
-        if (file.field === "image") data.image = file.url;
-        if (file.field === "previewVideo") data.previewVideo = file.url;
-        if (file.field === "downloadBrochure") data.downloadBrochure = file.url;
+        if (!fileMap[file.field]) fileMap[file.field] = [];
+        fileMap[file.field].push(file.url);
+      }
+
+      const singleFields = ["image", "previewVideo", "downloadBrochure"];
+      for (const [field, urls] of Object.entries(fileMap)) {
+        data[field] = singleFields.includes(field) && urls.length === 1 ? urls[0] : urls;
       }
     }
-
     data.courseId = uuidv4();
     if (data.type === "Business") {
       delete data.previewVideo;
@@ -46,7 +87,6 @@ export const createCourse = async (req, res, next) => {
     } else if (data.type === "Student") {
       delete data.downloadBrochure;
     }
-
     const newCourse = new Course(data);
     const saved = await newCourse.save();
 
@@ -55,13 +95,15 @@ export const createCourse = async (req, res, next) => {
       message: "Course created successfully",
       data: saved,
     });
+
   } catch (err) {
-    console.error("Create Course Error:", err);
-    return next(err);
+    console.error("❌ Create Course Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Server error",
+    });
   }
 };
-
-
 
 // GET ALL COURSES
 export const getAllCourses = async (req, res, next) => {
@@ -118,70 +160,99 @@ export const deleteCourse = async (req, res, next) => {
   try {
     const { courseId } = req.params;
 
-    const deleted = await Course.findOneAndDelete({ courseId });
-
-    if (!deleted) {
+    const course = await Course.findOne({ courseId });
+    if (!course) {
       return res.status(404).json({ success: false, message: "Course not found" });
     }
 
+    const fileFields = ["image", "previewVideo", "downloadBrochure"];
+    for (const field of fileFields) {
+      const url = course[field];
+      if (url) {
+        try {
+          await deleteS3File(url);
+        } catch (err) {
+          console.warn(`Failed to delete ${field} from S3:`, err.message);
+        }
+      }
+    }
+
+    await Course.findOneAndDelete({ courseId });
+
     res.status(200).json({
       success: true,
-      message: "Course deleted successfully",
+      message: "Course deleted and files removed from S3",
     });
   } catch (error) {
     next(error);
   }
 };
 
+
 // UPDATE COURSE
 export const editCourse = async (req, res, next) => {
   try {
-    const { id } = req.params;
-
+    const { courseId } = req.params;
     const updateFields = { ...req.body };
     const arrayFields = ["whatYouWillLearn", "topics", "includes", "requirements"];
+
+    // Parse stringified arrays
     arrayFields.forEach((key) => {
       if (typeof updateFields[key] === "string") {
         try {
           updateFields[key] = JSON.parse(updateFields[key]);
         } catch {
-          updateFields[key] = updateFields[key].split(",").map((item) => item.trim());
+          updateFields[key] = updateFields[key]
+            .split(",")
+            .map((item) => item.trim());
         }
       }
     });
-    if (req.files) {
-      if (req.files.previewVideo?.[0]) {
-        updateFields.previewVideo = req.files.previewVideo[0].path;
+
+    const existingCourse = await Course.findOne({ courseId });
+    if (!existingCourse) {
+      return res.status(404).json({ success: false, message: "Course not found" });
+    }
+    if (req.s3Uploads?.length) {
+      const fileMap = {};
+      for (const file of req.s3Uploads) {
+        if (!fileMap[file.field]) fileMap[file.field] = [];
+        fileMap[file.field].push(file.url);
       }
-      if (req.files.downloadBrochure?.[0]) {
-        updateFields.downloadBrochure = req.files.downloadBrochure[0].path;
-      }
-      if (req.files.image?.[0]) {
-        updateFields.image = req.files.image[0].path;
+
+      const singleFields = ["image", "previewVideo", "downloadBrochure"];
+      for (const [field, urls] of Object.entries(fileMap)) {
+        if (singleFields.includes(field)) {
+          const oldFile = existingCourse[field];
+          if (oldFile && oldFile !== urls[0]) {
+            try {
+              await deleteS3File(oldFile);
+            } catch (err) {
+              console.warn(`Failed to delete old ${field} from S3:`, err.message);
+            }
+          }
+          updateFields[field] = urls[0]; 
+        }
       }
     }
     if (updateFields.type === "Business") {
-      delete updateFields.previewVideo;
-      delete updateFields.whatYouWillLearn;
-      delete updateFields.price;
-      delete updateFields.salePrice;
-      delete updateFields.topics;
-      delete updateFields.requirements;
+      Object.assign(updateFields, {
+        previewVideo: undefined,
+        whatYouWillLearn: undefined,
+        price: undefined,
+        salePrice: undefined,
+        topics: undefined,
+        requirements: undefined,
+      });
     } else if (updateFields.type === "Student") {
-      delete updateFields.downloadBrochure;
+      updateFields.downloadBrochure = undefined;
     }
+
     const updatedCourse = await Course.findOneAndUpdate(
-      { courseId: id },
+      { courseId },
       { $set: updateFields },
       { new: true, runValidators: true }
     );
-
-    if (!updatedCourse) {
-      return res.status(404).json({
-        success: false,
-        message: `Course not found with courseId: ${id}`,
-      });
-    }
 
     res.status(200).json({
       success: true,
