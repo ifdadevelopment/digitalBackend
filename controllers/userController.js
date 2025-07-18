@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import validator from "validator";
 import { errorHandler } from "../utils/error.js";
+import { deleteS3File } from "../utils/deleteS3File.js";
 
 const createToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: "7d" });
@@ -43,6 +44,7 @@ export const registerUser = async (req, res, next) => {
   }
 };
 
+// ✅ LOGIN USER (Supports both Admin & Student)
 export const loginUser = async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -95,18 +97,15 @@ export const getUserProfile = async (req, res, next) => {
   }
 };
 
-// ✅ UPDATE USER PROFILE
+// ✅ UPDATE USER PROFILE WITH IMAGE SUPPORT
 export const updateUserProfile = async (req, res) => {
   try {
     const { oldPassword, newPassword, confirmNewPassword, ...otherData } = req.body;
-
     if (!req.user?.id) {
       return res.status(401).json({ message: "Unauthorized access" });
     }
-
     const user = await userModel.findById(req.user.id).select("+password");
     if (!user) return res.status(404).json({ message: "User not found" });
-
     if (oldPassword || newPassword || confirmNewPassword) {
       if (!oldPassword || !newPassword || !confirmNewPassword) {
         return res.status(400).json({ message: "All password fields are required" });
@@ -120,23 +119,35 @@ export const updateUserProfile = async (req, res) => {
       if (newPassword !== confirmNewPassword) {
         return res.status(400).json({ message: "Passwords do not match" });
       }
-
       user.password = newPassword;
     }
+    const profileUpload = req.s3Uploads?.find(file => file.field === "profileImage");
 
+    if (profileUpload && profileUpload.url) {
+      if (user.profileImage) {
+        try {
+          await deleteS3File(user.profileImage);
+        } catch (err) {
+          console.warn("Failed to delete previous profile image from S3:", err.message);
+        }
+      }
+
+      user.profileImage = profileUpload.url; 
+    }
     Object.assign(user, otherData);
+
     await user.save();
 
     const { password, ...safeUser } = user.toObject();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       user: safeUser,
       message: "Profile updated successfully",
     });
   } catch (error) {
     console.error("Update error:", error);
-    res.status(500).json({ message: "Something went wrong" });
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };
 

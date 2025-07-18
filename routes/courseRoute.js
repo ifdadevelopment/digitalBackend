@@ -27,7 +27,16 @@ courseRouter.post(
   createCourse
 );
 
-courseRouter.put("/edit/:courseId", editCourse);
+courseRouter.put(
+  "/edit/:courseId",
+  verifyUser,
+  isAdmin,
+  getUploadMiddleware(allowedFields),
+  multerErrorHandler,
+  extractS3Uploads,
+  editCourse
+);
+
 courseRouter.get("/courseAll", getAllCourses);
 courseRouter.get("/:courseId", getCourseById);
 courseRouter.delete("/:courseId", deleteCourse);

@@ -1,22 +1,44 @@
 import Blog from "../models/Blog.js";
 import { v4 as uuidv4 } from "uuid";
 
-
 export const createBlog = async (req, res) => {
   try {
     const blogData = {
       ...req.body,
-      id: uuidv4(), 
+      id: uuidv4(),
     };
+    if (req.s3Uploads?.length) {
+      const fileMap = {};
+      for (const file of req.s3Uploads) {
+        if (!fileMap[file.field]) fileMap[file.field] = [];
+        fileMap[file.field].push(file.url);
+      }
+      if (fileMap.blogImage?.[0]) blogData.coverImage = fileMap.blogImage[0];
+      if (fileMap.blogAImages?.[0]) blogData.author = { ...blogData.author, image: fileMap.blogAImages[0] };
+      if (blogData.content) {
+        const contentBlocks = JSON.parse(blogData.content);
+        const updatedBlocks = contentBlocks.map((block, i) => {
+          if (block.type === "image" && block.attrs?.localId !== undefined) {
+            const field = `content-image-${block.attrs.localId}`;
+            const matched = req.s3Uploads.find(f => f.field === field);
+            if (matched) block.value = matched.url;
+          }
+          return block;
+        });
+        blogData.content = updatedBlocks;
+      }
+    }
 
     const blog = new Blog(blogData);
     await blog.save();
 
     res.status(201).json(blog);
   } catch (error) {
+    console.error("Create blog error:", error);
     res.status(400).json({ success: false, message: error.message });
   }
 };
+
 
 export const getAllBlogs = async (_req, res) => {
   try {
