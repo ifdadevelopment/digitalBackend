@@ -28,6 +28,27 @@ export const createCourse = async (req, res) => {
       });
     }
 const jsonFields = ["whatYouWillLearn", "topics", "includes", "requirements"];
+
+const customSplit = (input) => {
+  const result = [];
+  let current = '';
+  let depth = 0;
+
+  for (let char of input) {
+    if (char === ',' && depth === 0) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      if (char === '(') depth++;
+      if (char === ')') depth--;
+      current += char;
+    }
+  }
+
+  if (current) result.push(current.trim());
+  return result.filter(Boolean);
+};
+
 for (const field of jsonFields) {
   if (data[field]) {
     try {
@@ -35,8 +56,7 @@ for (const field of jsonFields) {
         try {
           const parsed = JSON.parse(data[field]);
           if (Array.isArray(parsed)) {
-            data[field] = parsed;
-            continue;
+            data[field] = parsed; // ✅ Save as array
           } else {
             return res.status(400).json({
               success: false,
@@ -44,12 +64,11 @@ for (const field of jsonFields) {
             });
           }
         } catch {
-          // Fallback to custom parser
           const parsed = customSplit(data[field]);
-          data[field] = parsed;
+          data[field] = parsed; 
         }
       } else if (Array.isArray(data[field])) {
-        continue;
+        data[field] = data[field]; 
       } else {
         return res.status(400).json({
           success: false,
@@ -195,8 +214,6 @@ export const editCourse = async (req, res, next) => {
     const { courseId } = req.params;
     const updateFields = { ...req.body };
     const arrayFields = ["whatYouWillLearn", "topics", "includes", "requirements"];
-
-    // Parse stringified arrays
     arrayFields.forEach((key) => {
       if (typeof updateFields[key] === "string") {
         try {
@@ -216,24 +233,32 @@ export const editCourse = async (req, res, next) => {
     if (req.s3Uploads?.length) {
       const fileMap = {};
       for (const file of req.s3Uploads) {
-        if (!fileMap[file.field]) fileMap[file.field] = [];
-        fileMap[file.field].push(file.url);
+        fileMap[file.field] = file.url;
       }
-
       const singleFields = ["image", "previewVideo", "downloadBrochure"];
-      for (const [field, urls] of Object.entries(fileMap)) {
-        if (singleFields.includes(field)) {
-          const oldFile = existingCourse[field];
-          if (oldFile && oldFile !== urls[0]) {
+      for (const field of singleFields) {
+        const newUrl = fileMap[field];
+        const oldUrl = existingCourse[field];
+
+        if (newUrl && newUrl !== oldUrl) {
+          if (oldUrl) {
             try {
-              await deleteS3File(oldFile);
+              await deleteS3File(oldUrl);
             } catch (err) {
-              console.warn(`Failed to delete old ${field} from S3:`, err.message);
+              console.warn(`⚠️ Failed to delete old ${field} from S3:`, err.message);
             }
           }
-          updateFields[field] = urls[0]; 
+          updateFields[field] = newUrl;
+        } else if (!newUrl && oldUrl) {
+          updateFields[field] = oldUrl; 
         }
       }
+    } else {
+      ["image", "previewVideo", "downloadBrochure"].forEach((field) => {
+        if (existingCourse[field]) {
+          updateFields[field] = existingCourse[field];
+        }
+      });
     }
     if (updateFields.type === "Business") {
       Object.assign(updateFields, {

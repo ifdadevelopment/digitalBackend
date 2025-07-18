@@ -26,7 +26,11 @@ const diskStorage = multer.diskStorage({
 });
 
 // Multer instance
+<<<<<<< HEAD
 const createMulter = (maxFileSize = 100 * 1024 * 1024) =>
+=======
+const createMulter = (maxFileSize = 4 * 1024 * 1024 * 1024 ) =>
+>>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
   multer({
     storage: diskStorage,
     limits: { fileSize: maxFileSize },
@@ -60,6 +64,7 @@ export const extractS3Uploads = async (req, res, next) => {
         .basename(file.originalname, path.extname(file.originalname))
         .replace(/\s+/g, "_")
         .replace(/[^a-zA-Z0-9_-]/g, "");
+<<<<<<< HEAD
 
       let folder = "courses/others";
       if (file.fieldname === "image") folder = "courses/images";
@@ -68,6 +73,18 @@ export const extractS3Uploads = async (req, res, next) => {
       else if (file.fieldname === "previewVideo") folder = "courses/previews";
       else if (file.fieldname === "downloadBrochure")
         folder = "courses/brochures";
+=======
+      let folder = "others";
+
+      if (file.fieldname === "image") folder = "courses/images";
+      else if (file.fieldname === "profileImage") folder = "users/profileImages";
+      else if (file.fieldname === "previewVideo") folder = "courses/previews";
+      else if (file.fieldname === "downloadBrochure") folder = "courses/brochures";
+      else if (file.fieldname === "blogImage") folder = "blogs/coverImages";
+      else if (file.fieldname === "blogAImages") folder = "blogs/authorImages";
+      else if (file.fieldname.startsWith("content-image")) folder = "blogs/contentBlocks";
+      else if (file.fieldname.startsWith("course-image")) folder = "courses/contentBlocks";
+>>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
 
       const key = `${folder}/${Date.now()}-${uuidv4()}-${baseName}.${ext}`;
       const fileBuffer = await fs.readFile(file.path);
@@ -78,7 +95,10 @@ export const extractS3Uploads = async (req, res, next) => {
           Key: key,
           Body: fileBuffer,
           ContentType: file.mimetype,
+<<<<<<< HEAD
           ACL: "public-read",
+=======
+>>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
         })
       );
 

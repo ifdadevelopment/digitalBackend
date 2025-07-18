@@ -101,15 +101,16 @@ export const getUserProfile = async (req, res, next) => {
 export const updateUserProfile = async (req, res) => {
   try {
     const { oldPassword, newPassword, confirmNewPassword, ...otherData } = req.body;
-
     if (!req.user?.id) {
       return res.status(401).json({ message: "Unauthorized access" });
     }
-
     const user = await userModel.findById(req.user.id).select("+password");
     if (!user) return res.status(404).json({ message: "User not found" });
+<<<<<<< HEAD
 
     // ✅ Handle password update
+=======
+>>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
     if (oldPassword || newPassword || confirmNewPassword) {
       if (!oldPassword || !newPassword || !confirmNewPassword) {
         return res.status(400).json({ message: "All password fields are required" });
@@ -123,10 +124,11 @@ export const updateUserProfile = async (req, res) => {
       if (newPassword !== confirmNewPassword) {
         return res.status(400).json({ message: "Passwords do not match" });
       }
-
       user.password = newPassword;
     }
+    const profileUpload = req.s3Uploads?.find(file => file.field === "profileImage");
 
+<<<<<<< HEAD
     // ✅ Handle new uploaded profile image (req.s3Uploads)
     if (req.s3Uploads?.length) {
       const profileUpload = req.s3Uploads.find(file => file.field === "profileImage");
@@ -145,20 +147,33 @@ export const updateUserProfile = async (req, res) => {
     }
 
     // ✅ Update other fields
+=======
+    if (profileUpload && profileUpload.url) {
+      if (user.profileImage) {
+        try {
+          await deleteS3File(user.profileImage);
+        } catch (err) {
+          console.warn("Failed to delete previous profile image from S3:", err.message);
+        }
+      }
+
+      user.profileImage = profileUpload.url; 
+    }
+>>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
     Object.assign(user, otherData);
 
     await user.save();
 
     const { password, ...safeUser } = user.toObject();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       user: safeUser,
       message: "Profile updated successfully",
     });
   } catch (error) {
     console.error("Update error:", error);
-    res.status(500).json({ message: "Something went wrong" });
+    return res.status(500).json({ message: "Something went wrong" });
   }
 };
 
