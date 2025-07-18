@@ -106,11 +106,6 @@ export const updateUserProfile = async (req, res) => {
     }
     const user = await userModel.findById(req.user.id).select("+password");
     if (!user) return res.status(404).json({ message: "User not found" });
-<<<<<<< HEAD
-
-    // ✅ Handle password update
-=======
->>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
     if (oldPassword || newPassword || confirmNewPassword) {
       if (!oldPassword || !newPassword || !confirmNewPassword) {
         return res.status(400).json({ message: "All password fields are required" });
@@ -128,26 +123,6 @@ export const updateUserProfile = async (req, res) => {
     }
     const profileUpload = req.s3Uploads?.find(file => file.field === "profileImage");
 
-<<<<<<< HEAD
-    // ✅ Handle new uploaded profile image (req.s3Uploads)
-    if (req.s3Uploads?.length) {
-      const profileUpload = req.s3Uploads.find(file => file.field === "profileImage");
-      if (profileUpload) {
-        // Delete previous image if exists
-        if (user.profileImage) {
-          try {
-            await deleteS3File(user.profileImage);
-          } catch (err) {
-            console.warn("Failed to delete previous profile image from S3:", err.message);
-          }
-        }
-
-        user.profileImage = profileUpload.url;
-      }
-    }
-
-    // ✅ Update other fields
-=======
     if (profileUpload && profileUpload.url) {
       if (user.profileImage) {
         try {
@@ -159,7 +134,6 @@ export const updateUserProfile = async (req, res) => {
 
       user.profileImage = profileUpload.url; 
     }
->>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
     Object.assign(user, otherData);
 
     await user.save();
@@ -176,7 +150,6 @@ export const updateUserProfile = async (req, res) => {
     return res.status(500).json({ message: "Something went wrong" });
   }
 };
-
 
 // ✅ LOGOUT
 export const logoutUser = async (req, res, next) => {

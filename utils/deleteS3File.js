@@ -29,8 +29,4 @@ export const deleteS3File = async (fileUrl) => {
   } catch (err) {
     console.error("❌ Failed to delete file from S3:", err.message || err);
   }
-<<<<<<< HEAD
 };
-=======
-};
->>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2

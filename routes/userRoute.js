@@ -12,10 +12,6 @@ userRouter.post("/register", registerUser);
 userRouter.get("/me",verifyUser, getUserProfile);
 userRouter.get("/all", getAllUsers);
 userRouter.post("/login", loginUser);
-<<<<<<< HEAD
-userRouter.put("/update-profile", verifyUser, getUploadMiddleware([{ name: "profileImage", maxCount: 1 }]),
-  extractS3Uploads, updateUserProfile);
-=======
 userRouter.put(
   "/update-profile",
   verifyUser,
@@ -23,7 +19,6 @@ userRouter.put(
   extractS3Uploads, 
   updateUserProfile
 );
->>>>>>> e63387d8b870611f2c67bb12cb71170905bc30c2
 userRouter.delete("/logout", logoutUser);
 
 export default userRouter;

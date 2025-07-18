@@ -15,10 +15,6 @@ const allowedFields = [
   { name: "blogAImages", maxCount: 1 },
   { name: /^content-image-\d+$/, maxCount: 1 },  
 ];
-
-
-
-
 blogRouter.post("/create",  getUploadMiddleware(allowedFields),
   extractS3Uploads, createBlog);       
 blogRouter.get("/blogsAll", getAllBlogs);        
