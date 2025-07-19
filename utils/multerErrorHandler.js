@@ -1,4 +1,6 @@
 import multer from "multer";
+
+// Handle multer errors globally
 export const multerErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     console.error("❌ Multer error:", err);

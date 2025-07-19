@@ -100,56 +100,42 @@ export const getUserProfile = async (req, res, next) => {
 // ✅ UPDATE USER PROFILE WITH IMAGE SUPPORT
 export const updateUserProfile = async (req, res) => {
   try {
-    const { oldPassword, newPassword, confirmNewPassword, ...otherData } = req.body;
-    if (!req.user?.id) {
-      return res.status(401).json({ message: "Unauthorized access" });
-    }
-    const user = await userModel.findById(req.user.id).select("+password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    if (oldPassword || newPassword || confirmNewPassword) {
-      if (!oldPassword || !newPassword || !confirmNewPassword) {
-        return res.status(400).json({ message: "All password fields are required" });
-      }
+    const user = await userModel.findById(req.user._id);
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-      const isMatch = await user.comparePassword(oldPassword);
-      if (!isMatch) {
-        return res.status(400).json({ message: "Old password is incorrect" });
+    const { name, phone, address, oldPassword, newPassword, confirmNewPassword } = req.body;
+
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+
+    if (req.s3Uploads?.length) {
+      const profileImg = req.s3Uploads.find(f => f.field === "profileImage");
+      if (profileImg) {
+        user.profileImage = profileImg.url;
       }
+    }
+
+    if (oldPassword && newPassword && confirmNewPassword) {
+      const isMatch = await user.comparePassword(oldPassword);
+      if (!isMatch) return res.status(400).json({ success: false, message: "Incorrect old password" });
 
       if (newPassword !== confirmNewPassword) {
-        return res.status(400).json({ message: "Passwords do not match" });
+        return res.status(400).json({ success: false, message: "New passwords do not match" });
       }
+
       user.password = newPassword;
     }
-    const profileUpload = req.s3Uploads?.find(file => file.field === "profileImage");
-
-    if (profileUpload && profileUpload.url) {
-      if (user.profileImage) {
-        try {
-          await deleteS3File(user.profileImage);
-        } catch (err) {
-          console.warn("Failed to delete previous profile image from S3:", err.message);
-        }
-      }
-
-      user.profileImage = profileUpload.url; 
-    }
-    Object.assign(user, otherData);
 
     await user.save();
 
-    const { password, ...safeUser } = user.toObject();
-
-    return res.status(200).json({
-      success: true,
-      user: safeUser,
-      message: "Profile updated successfully",
-    });
-  } catch (error) {
-    console.error("Update error:", error);
-    return res.status(500).json({ message: "Something went wrong" });
+    res.json({ success: true, user });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: "Update failed", error: err.message });
   }
 };
+
 
 // ✅ LOGOUT
 export const logoutUser = async (req, res, next) => {
