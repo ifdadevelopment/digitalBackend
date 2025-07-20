@@ -26,7 +26,7 @@ const diskStorage = multer.diskStorage({
 });
 
 // Multer instance
-const createMulter = (maxFileSize = 4 * 1024 * 1024 * 1024 ) =>
+const createMulter = (maxFileSize = 4 * 1024 * 1024 * 1024) =>
   multer({
     storage: diskStorage,
     limits: { fileSize: maxFileSize },
@@ -63,13 +63,17 @@ export const extractS3Uploads = async (req, res, next) => {
       let folder = "others";
 
       if (file.fieldname === "image") folder = "courses/images";
-      else if (file.fieldname === "profileImage") folder = "users/profileImages";
+      else if (file.fieldname === "profileImage")
+        folder = "users/profileImages";
       else if (file.fieldname === "previewVideo") folder = "courses/previews";
-      else if (file.fieldname === "downloadBrochure") folder = "courses/brochures";
+      else if (file.fieldname === "downloadBrochure")
+        folder = "courses/brochures";
       else if (file.fieldname === "blogImage") folder = "blogs/coverImages";
       else if (file.fieldname === "blogAImages") folder = "blogs/authorImages";
-      else if (file.fieldname.startsWith("content-image")) folder = "blogs/contentBlocks";
-      else if (file.fieldname.startsWith("course-image")) folder = "courses/contentBlocks";
+      else if (/^content-image-\d+$/.test(file.fieldname))
+        folder = "blogs/contentBlocks";
+      else if (file.fieldname.startsWith("course-image"))
+        folder = "courses/contentBlocks";
 
       const key = `${folder}/${Date.now()}-${uuidv4()}-${baseName}.${ext}`;
       const fileBuffer = await fs.readFile(file.path);
