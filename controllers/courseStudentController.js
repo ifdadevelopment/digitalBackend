@@ -7,158 +7,146 @@ import userModel from "../models/UserModel.js";
 // ✅ Create course enrollment 
 export const createCourseStudent = async (req, res, next) => {
   try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
     const {
       courseId,
       badge,
       level,
       tags,
-      totalHours,
       watchedHours,
-      modules,
-      finalTest
+      totalHours,
+      modules: rawModules,
+      finalTest: rawFinalTest
     } = req.body;
 
     const course = await Course.findOne({ courseId, type: "Student" });
-
     if (!course) {
-      return res.status(404).json({
-        message: "Course not found or not a Student-type course"
-      });
+      return res.status(404).json({ message: "Course not found or not a Student-type course" });
     }
 
-    const safeTotalHours = Number(totalHours) || 0;
-    const safeWatchedHours = Number(watchedHours) || 0;
+    const s3Uploads = req.s3Uploads || [];
 
-    const progressPercentage =
-      safeTotalHours > 0 ? (safeWatchedHours / safeTotalHours) * 100 : 0;
-    let totalAssessments = 0;
-    let totalAssignments = 0;
+    const parsedTags = typeof tags === "string" ? JSON.parse(tags) : [];
+    const parsedModules = typeof rawModules === "string" ? JSON.parse(rawModules) : [];
+    const parsedFinalTest = typeof rawFinalTest === "string" ? JSON.parse(rawFinalTest) : null;
 
-    const parsedModules = Array.isArray(modules)
-      ? modules.map((mod) => {
+    let hours = 0;
+    let assessments = 0;
+    let assignments = 0;
+
+    const modules = parsedModules.map((mod, mIndex) => ({
+      moduleTitle: mod.moduleTitle,
+      description: mod.description,
+      completed: mod.completed || false,
+      topics: (mod.topics || []).map((topic, tIndex) => ({
+        topicId: uuidv4(),
+        topicTitle: topic.topicTitle,
+        completed: topic.completed || false,
+        contents: (topic.contents || []).map((content, cIndex) => {
+          const fieldPrefix = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
+          const matchedFile = s3Uploads.find(file => file.field === fieldPrefix);
+
+          const duration = Number(content.duration) || 0;
+          hours += duration;
+
+          const contentQuestions = (content.questions || []).map(q => ({
+            question: q.question,
+            options: q.options,
+            answer: q.answer,
+            selectedAnswer: q.selectedAnswer || "",
+            multiSelect: q.multiSelect || false,
+            isCorrect: q.isCorrect || false
+          }));
+
+          if (contentQuestions.length) assessments++;
+          assignments += contentQuestions.length;
+
           return {
-            moduleTitle: mod.moduleTitle,
-            description: mod.description,
-            completed: mod.completed || false,
-            topics: Array.isArray(mod.topics)
-              ? mod.topics.map((topic) => {
-                  return {
-                    topicId: uuidv4(),
-                    topicTitle: topic.topicTitle,
-                    completed: topic.completed || false,
-                    contents: Array.isArray(topic.contents)
-                      ? topic.contents.map((content) => {
-                          totalAssessments++; 
-                          const contentQuestions = Array.isArray(content.questions)
-                            ? content.questions.map((q) => ({
-                                question: q.question,
-                                options: q.options,
-                                answer: q.answer,
-                                selectedAnswer: q.selectedAnswer || "",
-                                isCorrect: q.isCorrect || false
-                              }))
-                            : [];
-
-                          totalAssignments += contentQuestions.length;
-
-                          return {
-                            type: content.type,
-                            name: content.name,
-                            duration: content.duration,
-                            url: content.url,
-                            completed: content.completed || false,
-                            score: content.score || 0,
-                            questions: contentQuestions
-                          };
-                        })
-                      : []
-                  };
-                })
-              : []
+            type: content.type,
+            name: content.name,
+            duration,
+            pages: content.pages || "",
+            url: matchedFile?.url || "", 
+            completed: content.completed || false,
+            score: content.score || 0,
+            questions: contentQuestions
           };
         })
-      : [];
-    const finalTestData = finalTest
-      ? {
-          name: finalTest.name || "",
-          type: "test",
-          completed: finalTest.completed || false,
-          score: finalTest.score || 0,
-          questions: Array.isArray(finalTest.questions)
-            ? finalTest.questions.map((q) => ({
-                question: q.question,
-                options: q.options,
-                answer: q.answer,
-                selectedAnswer: q.selectedAnswer || "",
-                isCorrect: q.isCorrect || false
-              }))
-            : []
-        }
-      : {
-          name: "",
-          type: "test",
-          completed: false,
-          score: 0,
-          questions: []
-        };
+      }))
+    }));
 
-    const totalFinalQuestions = finalTestData.questions.length;
+    const finalTest = parsedFinalTest
+      ? {
+          name: parsedFinalTest.name || "Final Assessment",
+          type: "test",
+          completed: parsedFinalTest.completed || false,
+          score: parsedFinalTest.score || 0,
+          questions: (parsedFinalTest.questions || []).map(q => ({
+            question: q.question,
+            options: q.options,
+            answer: q.answer,
+            selectedAnswer: q.selectedAnswer || "",
+            multiSelect: q.multiSelect || false,
+            isCorrect: q.isCorrect || false
+          }))
+        }
+      : null;
 
     const enrolledCourse = {
-      courseId: course.courseId,
+      courseId,
       title: course.title,
       image: course.image,
       previewVideo: course.previewVideo,
       badge: badge || "",
       level: level || "Beginner",
-      tags: Array.isArray(tags) ? tags : [],
-      totalHours: safeTotalHours,
-      watchedHours: safeWatchedHours,
-      assessments: totalAssessments,
-      assignments: totalAssignments,
-      questions: totalFinalQuestions,
-      modules: parsedModules,
-      finalTest: finalTestData,
+      tags: parsedTags,
+      totalHours: Number(totalHours) || hours,
+      watchedHours: Number(watchedHours) || 0,
+      assessments,
+      assignments,
+      questions: finalTest?.questions?.length || 0,
+      modules,
+      finalTest,
       progress: false,
-      progressPercentage,
-      isCompleted: safeWatchedHours === safeTotalHours && safeTotalHours > 0,
+      progressPercent: hours > 0 ? Math.round((watchedHours / hours) * 100) : 0,
+      isCompleted: Number(watchedHours) === hours && hours > 0,
       startedAt: new Date()
     };
-
-    let courseStudent = await CourseStudent.findOne();
+    let courseStudent = await CourseStudent.findOne({ userId });
 
     if (!courseStudent) {
       courseStudent = new CourseStudent({
+        userId,
         enrolledCourses: [enrolledCourse]
       });
     } else {
-      const alreadyEnrolled = courseStudent.enrolledCourses.find(
-        (c) => c.courseId === course.courseId
-      );
-
-      if (alreadyEnrolled) {
-        return res.status(400).json({
-          message: "Student is already enrolled in this course"
-        });
+      const already = courseStudent.enrolledCourses.find(c => c.courseId === courseId);
+      if (already) {
+        return res.status(400).json({ message: "Already enrolled in this course" });
       }
-
       courseStudent.enrolledCourses.push(enrolledCourse);
     }
 
+    courseStudent.updateGlobalProgress();
     const saved = await courseStudent.save();
-    return res.status(201).json(saved);
+
+    return res.status(201).json({
+      message: "Enrollment created successfully",
+      data: saved
+    });
   } catch (error) {
-    console.error("Create course student error:", error);
+    console.error("❌ createCourseStudent error:", error);
     next(error);
   }
 };
-
-
 // ✅ Get all students (Admin)
 export const getAllEnrolledCourses = async (req, res, next) => {
   try {
     const { courseId } = req.query;
-    const students = await CourseStudent.find().populate();
+
+    const students = await CourseStudent.find();
 
     let totalEnrolledCourses = 0;
     let totalEnrolledUsers = 0;
@@ -166,9 +154,8 @@ export const getAllEnrolledCourses = async (req, res, next) => {
     const uniqueCourseIds = new Set();
 
     for (const student of students) {
-      const courses = Array.isArray(student.enrolledCourses)
-        ? student.enrolledCourses
-        : [];
+      const courses = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
+
       const filteredCourses = courseId
         ? courses.filter((c) => c.courseId?.toString() === courseId)
         : courses;
@@ -193,6 +180,9 @@ export const getAllEnrolledCourses = async (req, res, next) => {
       }
     }
 
+    // ✅ Fetch all courses of type "Student" with only courseId and title
+    const studentCourses = await Course.find({ type: "Student" }).select("courseId title");
+
     return res.status(200).json({
       success: true,
       summary: {
@@ -201,6 +191,7 @@ export const getAllEnrolledCourses = async (req, res, next) => {
         totalUniqueCourses: uniqueCourseIds.size,
       },
       enrolledCourses,
+      studentCourses, 
     });
   } catch (err) {
     console.error("Failed to fetch enrolled courses:", err);
@@ -211,10 +202,7 @@ export const getAllEnrolledCourses = async (req, res, next) => {
     });
   }
 };
-
-
 // ✅ Get all or specific enrolled course (must be purchased)
-
 export const getPurchasedEnrolledCourseDetailsByUser = async (req, res) => {
   try {
    const userId = req.user._id;
@@ -336,7 +324,6 @@ export const getCourseResume = async (req, res, next) => {
     next(err); 
   }
 };
-
 // ✅ Update Resume Progress and Last Watched
 export const updateCourseResume = async (req, res, next) => {
   try {
@@ -397,8 +384,6 @@ export const updateCourseResume = async (req, res, next) => {
     next(err); 
   }
 };
-
-
 // ✅ Update watched progress
 export const updateProgress = async (req, res, next) => {
   try {
@@ -420,7 +405,6 @@ export const updateProgress = async (req, res, next) => {
     next(err);
   }
 };
-
 // ✅ Admin: update full enrolledCourses array
 export const updateCourseStudent = async (req, res, next) => {
   try {
@@ -437,7 +421,6 @@ export const updateCourseStudent = async (req, res, next) => {
     next(err);
   }
 };
-
 // ✅ Delete CourseStudent (admin)
 export const deleteCourseStudent = async (req, res, next) => {
   try {
@@ -450,3 +433,73 @@ export const deleteCourseStudent = async (req, res, next) => {
     next(err);
   }
 };
+//Final Test added 
+export const addFinalTestToCourse = async (req, res, next) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const { courseId, finalTest: rawFinalTest } = req.body;
+    if (!courseId || !rawFinalTest) {
+      return res.status(400).json({ message: "Missing courseId or finalTest" });
+    }
+
+    const parsedFinalTest =
+      typeof rawFinalTest === "string" ? JSON.parse(rawFinalTest) : rawFinalTest;
+
+    const courseStudent = await CourseStudent.findOne({ userId });
+    if (!courseStudent) {
+      return res.status(404).json({ message: "Student record not found" });
+    }
+
+    const enrolledCourse = courseStudent.enrolledCourses.find(
+      (c) => c.courseId === courseId
+    );
+
+    if (!enrolledCourse) {
+      return res.status(404).json({ message: "Enrolled course not found" });
+    }
+    const testName = parsedFinalTest.name?.trim();
+    if (!testName) {
+      return res.status(400).json({ message: "Test name is required." });
+    }
+    enrolledCourse.finalTest = {
+      name: testName,
+      type: "test",
+      completed: false,
+      score: 0,
+      questions: parsedFinalTest.questions.map((q) => ({
+        question: q.question,
+        options: q.options,
+        answer: q.answer,
+        selectedAnswer: "",
+        multiSelect: q.multiSelect || false,
+        isCorrect: false,
+      })),
+    };
+
+    enrolledCourse.questions = enrolledCourse.finalTest.questions.length;
+    if (!Array.isArray(enrolledCourse.testNames)) {
+      enrolledCourse.testNames = [];
+    }
+    if (!enrolledCourse.testNames.includes(testName)) {
+      enrolledCourse.testNames.push(testName);
+    }
+
+    courseStudent.updateGlobalProgress?.(); 
+    await courseStudent.save();
+
+    return res.status(200).json({
+      message: "✅ Final test added successfully.",
+      finalTest: enrolledCourse.finalTest,
+      testNames: enrolledCourse.testNames,
+    });
+  } catch (error) {
+    console.error("❌ Error adding final test:", error);
+    next(error);
+  }
+};
+
+
+
+
