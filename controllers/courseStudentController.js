@@ -499,7 +499,3 @@ export const addFinalTestToCourse = async (req, res, next) => {
     next(error);
   }
 };
-
-
-
-

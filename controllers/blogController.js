@@ -6,40 +6,37 @@ import { v4 as uuidv4 } from "uuid";
 export const createBlog = async (req, res, next) => {
   try {
     const { title, excerpt, category, tags, content, authorName } = req.body;
-
-    const blogData = {
-      title: title?.trim(),
-      excerpt: excerpt?.trim(),
-      category,
-      tags: tags?.split(",").map(tag => tag.trim()),
-      author: {
-        name: authorName?.trim(),
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    const fileMap = {};
+    const contentImageUrls = {};
     for (const file of req.s3Uploads || []) {
-      if (!fileMap[file.field]) fileMap[file.field] = [];
-      fileMap[file.field].push(file.url);
+      if (file.field.startsWith("content-image-")) {
+        const idx = file.field.split("-")[2];
+        if (!contentImageUrls[idx]) contentImageUrls[idx] = [];
+        contentImageUrls[idx].push(file.url);
+      }
     }
-    if (fileMap.blogImage?.[0]) {
-      blogData.coverImage = fileMap.blogImage[0];
+    const coverImageFile = (req.s3Uploads || []).find(
+      (f) => f.field === "blogImage"
+    );
+    if (!coverImageFile) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Cover image is required." });
     }
-
-    if (fileMap.blogAImages?.[0]) {
-      blogData.author.image = fileMap.blogAImages[0];
+    if (!title || !excerpt || !category || !content) {
+      return res.status(400).json({
+        success: false,
+        message: "Title, excerpt, category, and content are required.",
+      });
     }
-    if (content) {
-      const parsedContent = JSON.parse(content);
-
-      const updatedContent = parsedContent.map((block) => {
+    let updatedContent = [];
+    try {
+      const parsedContent =
+        typeof content === "string" ? JSON.parse(content) : content;
+      updatedContent = parsedContent.map((block) => {
         if (block.type === "image" && block.attrs?.localId !== undefined) {
-          const field = `content-image-${block.attrs.localId}`;
-          const imageUrl = fileMap[field]?.[0];
-          if (imageUrl) {
-            block.value = imageUrl;
-          }
+          const idx = String(block.attrs.localId);
+          const urls = contentImageUrls[idx] || [];
+          block.value = urls.length > 1 ? urls : urls[0] || "";
         }
         return block;
       });

@@ -41,4 +41,3 @@ courseStudentRouter.delete("/:id", isAdmin, deleteCourseStudent);
 
 
 export default courseStudentRouter;
-
