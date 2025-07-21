@@ -7,46 +7,39 @@ export const createBlog = async (req, res, next) => {
   try {
     const { title, excerpt, category, tags, content, authorName } = req.body;
 
-    // Map uploaded files to fields (handles any number of content block images)
-    const contentImageUrls = {};
+    const blogData = {
+      title: title?.trim(),
+      excerpt: excerpt?.trim(),
+      category,
+      tags: tags?.split(",").map(tag => tag.trim()),
+      author: {
+        name: authorName?.trim(),
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    const fileMap = {};
     for (const file of req.s3Uploads || []) {
-      if (file.field.startsWith("content-image-")) {
-        // Accept any localId (string or number)
-        const idx = file.field.split("-")[2];
-        if (!contentImageUrls[idx]) contentImageUrls[idx] = [];
-        contentImageUrls[idx].push(file.url);
-      }
+      if (!fileMap[file.field]) fileMap[file.field] = [];
+      fileMap[file.field].push(file.url);
+    }
+    if (fileMap.blogImage?.[0]) {
+      blogData.coverImage = fileMap.blogImage[0];
     }
 
-    // Validate required image
-    const coverImageFile = (req.s3Uploads || []).find(
-      (f) => f.field === "blogImage"
-    );
-    if (!coverImageFile) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Cover image is required." });
+    if (fileMap.blogAImages?.[0]) {
+      blogData.author.image = fileMap.blogAImages[0];
     }
+    if (content) {
+      const parsedContent = JSON.parse(content);
 
-    // Validate required fields
-    if (!title || !excerpt || !category || !content) {
-      return res.status(400).json({
-        success: false,
-        message: "Title, excerpt, category, and content are required.",
-      });
-    }
-
-    // Build content blocks and assign image URLs
-    let updatedContent = [];
-    try {
-      const parsedContent =
-        typeof content === "string" ? JSON.parse(content) : content;
-      updatedContent = parsedContent.map((block) => {
+      const updatedContent = parsedContent.map((block) => {
         if (block.type === "image" && block.attrs?.localId !== undefined) {
-          const idx = String(block.attrs.localId);
-          // If multiple files for a block, save as array, else string
-          const urls = contentImageUrls[idx] || [];
-          block.value = urls.length > 1 ? urls : urls[0] || "";
+          const field = `content-image-${block.attrs.localId}`;
+          const imageUrl = fileMap[field]?.[0];
+          if (imageUrl) {
+            block.value = imageUrl;
+          }
         }
         return block;
       });

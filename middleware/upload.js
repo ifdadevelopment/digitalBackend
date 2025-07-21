@@ -75,6 +75,10 @@ export const extractS3Uploads = async (req, res, next) => {
       else if (file.fieldname.startsWith("course-image"))
         folder = "courses/contentBlocks";
 
+      if (file.fieldname.startsWith("content-image")) folder = "modules/images";
+      else if (file.fieldname.startsWith("content-audio")) folder = "modules/audios";
+      else if (file.fieldname.startsWith("content-video")) folder = "modules/videos";
+      else if (file.fieldname.startsWith("content-pdf")) folder = "modules/pdfs";
       const key = `${folder}/${Date.now()}-${uuidv4()}-${baseName}.${ext}`;
       const fileBuffer = await fs.readFile(file.path);
 
