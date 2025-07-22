@@ -1,3 +1,4 @@
+
 import multer from "multer";
 import fs from "fs/promises";
 import os from "os";
@@ -110,9 +111,4 @@ export const extractS3Uploads = async (req, res, next) => {
       error: err.message,
     });
   }
-<<<<<<< HEAD
 };
-=======
-};
-
->>>>>>> 91c9d097995769e9733f608cc24065ad089b31f2
