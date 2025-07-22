@@ -1,4 +1,7 @@
 import express from "express";
+import multer from "multer";
+
+const upload = multer({ dest: "temp/" });
 import {
   createCourseStudent,
   getAllEnrolledCourses,
@@ -15,19 +18,14 @@ import { getUploadMiddleware,extractS3Uploads } from "../middleware/upload.js";
 import {multerErrorHandler} from "../utils/multerErrorHandler.js"
 const courseStudentRouter = express.Router();
 
-const allowedFields = [
-  { name: "content-image", maxCount: 100 },
-  { name: "content-audio", maxCount: 100 },
-  { name: "content-video", maxCount: 100 },
-  { name: "content-pdf", maxCount: 100 },
-];
+
 courseStudentRouter.get("/all", getAllEnrolledCourses);
 courseStudentRouter.get("/getCourseByUser", verifyUser, getPurchasedEnrolledCourseDetailsByUser);
 courseStudentRouter.post(
   "/create",
   verifyUser,
   isAdmin,
-  getUploadMiddleware(allowedFields), 
+   upload.any(),
   multerErrorHandler,
   extractS3Uploads,
   createCourseStudent
@@ -35,7 +33,9 @@ courseStudentRouter.post(
 courseStudentRouter.get("/:courseId", verifyUser, getCourseResume);
 courseStudentRouter.post("/finalTest", verifyUser, addFinalTestToCourse);
 courseStudentRouter.put("/:courseId", verifyUser, updateCourseResume);
-courseStudentRouter.put("/:id", isAdmin, updateCourseStudent);
+courseStudentRouter.put("enrolled/:courseId",   upload.any(),
+  multerErrorHandler,
+  extractS3Uploads, isAdmin, updateCourseStudent);
 courseStudentRouter.patch("/progress/:id", verifyUser, updateProgress);
 courseStudentRouter.delete("/:id", isAdmin, deleteCourseStudent);
 
