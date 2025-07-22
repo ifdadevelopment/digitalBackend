@@ -60,25 +60,22 @@ export const extractS3Uploads = async (req, res, next) => {
         .basename(file.originalname, path.extname(file.originalname))
         .replace(/\s+/g, "_")
         .replace(/[^a-zA-Z0-9_-]/g, "");
-      let folder = "others";
 
-      if (file.fieldname === "image") folder = "courses/images";
-      else if (file.fieldname === "profileImage")
-        folder = "users/profileImages";
-      else if (file.fieldname === "previewVideo") folder = "courses/previews";
-      else if (file.fieldname === "downloadBrochure")
-        folder = "courses/brochures";
-      else if (file.fieldname === "blogImage") folder = "blogs/coverImages";
-      else if (file.fieldname === "blogAImages") folder = "blogs/authorImages";
-      else if (/^content-image-\d+$/.test(file.fieldname))
-        folder = "blogs/contentBlocks";
-      else if (file.fieldname.startsWith("course-image"))
-        folder = "courses/contentBlocks";
+      let folder = "others";
 
       if (file.fieldname.startsWith("content-image")) folder = "modules/images";
       else if (file.fieldname.startsWith("content-audio")) folder = "modules/audios";
       else if (file.fieldname.startsWith("content-video")) folder = "modules/videos";
       else if (file.fieldname.startsWith("content-pdf")) folder = "modules/pdfs";
+      else if (file.fieldname === "image") folder = "courses/images";
+      else if (file.fieldname === "profileImage") folder = "users/profileImages";
+      else if (file.fieldname === "previewVideo") folder = "courses/previews";
+      else if (file.fieldname === "downloadBrochure") folder = "courses/brochures";
+      else if (file.fieldname === "blogImage") folder = "blogs/coverImages";
+      else if (file.fieldname === "blogAImages") folder = "blogs/authorImages";
+      else if (/^content-image-\d+/.test(file.fieldname)) folder = "blogs/contentBlocks";
+      else if (/^course-image/.test(file.fieldname)) folder = "courses/contentBlocks";
+
       const key = `${folder}/${Date.now()}-${uuidv4()}-${baseName}.${ext}`;
       const fileBuffer = await fs.readFile(file.path);
 
@@ -113,4 +110,9 @@ export const extractS3Uploads = async (req, res, next) => {
       error: err.message,
     });
   }
+<<<<<<< HEAD
 };
+=======
+};
+
+>>>>>>> 91c9d097995769e9733f608cc24065ad089b31f2

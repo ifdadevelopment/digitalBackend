@@ -3,6 +3,7 @@ import Course from "../models/CourseModel.js";
 import CourseStudent from "../models/CourseStudentModel.js";
 import Payment from "../models/PaymentModel.js";
 import userModel from "../models/UserModel.js";
+import { deleteS3File } from "../utils/deleteS3File.js";
 
 // ✅ Create course enrollment 
 export const createCourseStudent = async (req, res, next) => {
@@ -15,8 +16,6 @@ export const createCourseStudent = async (req, res, next) => {
       badge,
       level,
       tags,
-      watchedHours,
-      totalHours,
       modules: rawModules,
       finalTest: rawFinalTest
     } = req.body;
@@ -32,50 +31,56 @@ export const createCourseStudent = async (req, res, next) => {
     const parsedModules = typeof rawModules === "string" ? JSON.parse(rawModules) : [];
     const parsedFinalTest = typeof rawFinalTest === "string" ? JSON.parse(rawFinalTest) : null;
 
-    let hours = 0;
-    let assessments = 0;
-    let assignments = 0;
+let totalDuration = 0;
+let assessments = 0;
+let assignments = 0;
 
-    const modules = parsedModules.map((mod, mIndex) => ({
-      moduleTitle: mod.moduleTitle,
-      description: mod.description,
-      completed: mod.completed || false,
-      topics: (mod.topics || []).map((topic, tIndex) => ({
-        topicId: uuidv4(),
-        topicTitle: topic.topicTitle,
-        completed: topic.completed || false,
-        contents: (topic.contents || []).map((content, cIndex) => {
-          const fieldPrefix = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
-          const matchedFile = s3Uploads.find(file => file.field === fieldPrefix);
+const modules = parsedModules.map((mod, mIndex) => ({
+  moduleTitle: mod.moduleTitle,
+  description: mod.description,
+  completed: mod.completed || false,
+  topics: (mod.topics || []).map((topic, tIndex) => {
+    const topicContents = (topic.contents || []);
+    
+    assessments += topicContents.length; 
 
-          const duration = Number(content.duration) || 0;
-          hours += duration;
+    const updatedContents = topicContents.map((content, cIndex) => {
+      const fieldPrefix = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
+      const matchedFile = s3Uploads.find(file => file.field === fieldPrefix);
+      const duration = Number(content.duration) || 0;
+      totalDuration += duration;
+      if (Array.isArray(content.questions) && content.questions.length > 0) {
+        assignments++;
+      }
 
-          const contentQuestions = (content.questions || []).map(q => ({
-            question: q.question,
-            options: q.options,
-            answer: q.answer,
-            selectedAnswer: q.selectedAnswer || "",
-            multiSelect: q.multiSelect || false,
-            isCorrect: q.isCorrect || false
-          }));
+      return {
+        type: content.type,
+        name: matchedFile?.originalName || content.name || "",
+        duration,
+        pages: content.pages || "",
+        url: matchedFile?.url || content.url || "",
+        completed: content.completed || false,
+        score: content.score || 0,
+        questions: (content.questions || []).map(q => ({
+          question: q.question,
+          options: q.options,
+          answer: q.answer,
+          selectedAnswer: q.selectedAnswer || "",
+          multiSelect: q.multiSelect || false,
+          isCorrect: q.isCorrect || false
+        }))
+      };
+    });
 
-          if (contentQuestions.length) assessments++;
-          assignments += contentQuestions.length;
+    return {
+      topicId: uuidv4(),
+      topicTitle: topic.topicTitle,
+      completed: topic.completed || false,
+      contents: updatedContents
+    };
+  })
+}));
 
-          return {
-            type: content.type,
-            name: content.name,
-            duration,
-            pages: content.pages || "",
-            url: matchedFile?.url || "", 
-            completed: content.completed || false,
-            score: content.score || 0,
-            questions: contentQuestions
-          };
-        })
-      }))
-    }));
 
     const finalTest = parsedFinalTest
       ? {
@@ -94,6 +99,13 @@ export const createCourseStudent = async (req, res, next) => {
         }
       : null;
 
+    const formatTotalHours = (minutes) => {
+      if (minutes < 60) return `${minutes} min`;
+      const hrs = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hrs}h${mins > 0 ? ` ${mins}m` : ""}`;
+    };
+
     const enrolledCourse = {
       courseId,
       title: course.title,
@@ -102,18 +114,20 @@ export const createCourseStudent = async (req, res, next) => {
       badge: badge || "",
       level: level || "Beginner",
       tags: parsedTags,
-      totalHours: Number(totalHours) || hours,
-      watchedHours: Number(watchedHours) || 0,
+      totalHours: totalDuration,
+      totalHoursDisplay: formatTotalHours(totalDuration),
+      watchedHours: 0,
       assessments,
       assignments,
       questions: finalTest?.questions?.length || 0,
       modules,
       finalTest,
       progress: false,
-      progressPercent: hours > 0 ? Math.round((watchedHours / hours) * 100) : 0,
-      isCompleted: Number(watchedHours) === hours && hours > 0,
+      progressPercent: 0,
+      isCompleted: false,
       startedAt: new Date()
     };
+
     let courseStudent = await CourseStudent.findOne({ userId });
 
     if (!courseStudent) {
@@ -129,7 +143,7 @@ export const createCourseStudent = async (req, res, next) => {
       courseStudent.enrolledCourses.push(enrolledCourse);
     }
 
-    courseStudent.updateGlobalProgress();
+    courseStudent.updateGlobalProgress?.();
     const saved = await courseStudent.save();
 
     return res.status(201).json({
@@ -408,16 +422,152 @@ export const updateProgress = async (req, res, next) => {
 // ✅ Admin: update full enrolledCourses array
 export const updateCourseStudent = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const { enrolledCourses } = req.body;
+    const userId = req.user?.id;
+    const { courseId } = req.params;
+    const s3Uploads = req.s3Uploads || [];
 
-    const existing = await CourseStudent.findById(id);
-    if (!existing) return res.status(404).json({ message: "CourseStudent not found." });
+    const courseStudent = await CourseStudent.findOne({ userId });
+    if (!courseStudent) {
+      return res.status(404).json({ message: "CourseStudent not found" });
+    }
 
-    existing.enrolledCourses = enrolledCourses;
-    const updated = await existing.save();
-    res.status(200).json(updated);
+    const courseIndex = courseStudent.enrolledCourses.findIndex(
+      (c) => c.courseId === courseId
+    );
+    if (courseIndex === -1) {
+      return res.status(404).json({ message: "Enrolled course not found" });
+    }
+
+    const {
+      badge,
+      level,
+      tags,
+      modules: rawModules,
+      finalTest: rawFinalTest,
+    } = req.body;
+
+    const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
+    const parsedModules =
+      typeof rawModules === "string" ? JSON.parse(rawModules) : rawModules;
+    const parsedFinalTest =
+      typeof rawFinalTest === "string"
+        ? JSON.parse(rawFinalTest)
+        : rawFinalTest;
+
+    let totalDuration = 0;
+    let assessments = 0;
+    let assignments = 0;
+    let totalQuestions = 0;
+
+    const modules = await Promise.all(parsedModules.map(async (mod, mIndex) => ({
+      moduleTitle: mod.moduleTitle,
+      description: mod.description,
+      completed: mod.completed || false,
+      topics: await Promise.all((mod.topics || []).map(async (topic, tIndex) => {
+        const updatedContents = await Promise.all((topic.contents || []).map(async (content, cIndex) => {
+          const fieldPrefix = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
+          const matchedFile = s3Uploads.find(file => file.field === fieldPrefix);
+
+          const duration = Number(content.duration) || 0;
+          totalDuration += duration;
+          assessments++;
+
+          let url = content.url || "";
+          let name = content.name || "";
+          if (matchedFile) {
+            if (content.url) {
+              await deleteS3File(content.url); 
+            }
+            url = matchedFile.url;
+            name = matchedFile.originalName;
+          }
+
+          const questions = (content.questions || []).map(q => ({
+            question: q.question,
+            options: q.options,
+            answer: q.answer,
+            selectedAnswer: q.selectedAnswer || "",
+            multiSelect: q.multiSelect || false,
+            isCorrect: q.isCorrect || false,
+          }));
+
+          if (questions.length > 0) {
+            assignments++;
+            totalQuestions += questions.length;
+          }
+
+          return {
+            type: content.type,
+            name,
+            duration,
+            pages: content.pages || "",
+            url,
+            completed: content.completed || false,
+            score: content.score || 0,
+            questions,
+          };
+        }));
+
+        return {
+          topicId: topic.topicId || uuidv4(),
+          topicTitle: topic.topicTitle,
+          completed: topic.completed || false,
+          contents: updatedContents,
+        };
+      }))
+    })));
+
+    const finalTest = parsedFinalTest
+      ? {
+          name: parsedFinalTest.name || "Final Assessment",
+          type: "test",
+          completed: parsedFinalTest.completed || false,
+          score: parsedFinalTest.score || 0,
+          questions: (parsedFinalTest.questions || []).map((q) => ({
+            question: q.question,
+            options: q.options,
+            answer: q.answer,
+            selectedAnswer: q.selectedAnswer || "",
+            multiSelect: q.multiSelect || false,
+            isCorrect: q.isCorrect || false,
+          })),
+        }
+      : null;
+
+    const formatTotalHours = (minutes) => {
+      if (minutes < 60) return `${minutes} min`;
+      const hrs = Math.floor(minutes / 60);
+      const mins = minutes % 60;
+      return `${hrs}h${mins > 0 ? ` ${mins}m` : ""}`;
+    };
+
+    const updatedCourse = {
+      ...courseStudent.enrolledCourses[courseIndex],
+      badge: badge || "",
+      level: level || "Beginner",
+      tags: parsedTags || [],
+      totalHours: totalDuration,
+      totalHoursDisplay: formatTotalHours(totalDuration),
+      assessments,
+      assignments,
+      questions: totalQuestions,
+      modules,
+      finalTest,
+      updatedAt: new Date(),
+    };
+
+    courseStudent.enrolledCourses[courseIndex] = updatedCourse;
+
+    courseStudent.updateGlobalProgress?.();
+
+    const saved = await courseStudent.save();
+
+    res.status(200).json({
+      message: "✅ Course updated successfully",
+      data: saved,
+    });
   } catch (err) {
+    console.error("❌ updateCourseStudent error:", err);
     next(err);
   }
 };
@@ -468,14 +618,17 @@ export const addFinalTestToCourse = async (req, res, next) => {
       type: "test",
       completed: false,
       score: 0,
-      questions: parsedFinalTest.questions.map((q) => ({
-        question: q.question,
-        options: q.options,
-        answer: q.answer,
-        selectedAnswer: "",
-        multiSelect: q.multiSelect || false,
-        isCorrect: false,
-      })),
+    questions: (parsedFinalTest.questions || [])
+  .filter(q => q.question && typeof q.question === "string" && q.question.trim())
+  .map(q => ({
+    question: q.question.trim(),
+    options: q.options,
+    answer: q.answer,
+    selectedAnswer: q.selectedAnswer || "",
+    multiSelect: q.multiSelect || false,
+    isCorrect: q.isCorrect || false
+  }))
+
     };
 
     enrolledCourse.questions = enrolledCourse.finalTest.questions.length;
