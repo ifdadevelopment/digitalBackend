@@ -84,7 +84,10 @@ const enrolledCourseSchema = new mongoose.Schema({
   assessments:Number,
   assignments:Number,
   questions:Number,
-
+completedContent: {
+  type: [String],
+  default: [],
+},
   progress: { type: Boolean, default: false },
   progressPercent: { type: Number, default: 0 },
   isCompleted: { type: Boolean, default: false },

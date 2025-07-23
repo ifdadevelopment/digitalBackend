@@ -99,12 +99,26 @@ const modules = parsedModules.map((mod, mIndex) => ({
         }
       : null;
 
-    const formatTotalHours = (minutes) => {
-      if (minutes < 60) return `${minutes} min`;
-      const hrs = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return `${hrs}h${mins > 0 ? ` ${mins}m` : ""}`;
-    };
+function formatDuration(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+
+  const padded = (n) => String(n).padStart(2, '0');
+  return `${padded(hrs)}:${padded(mins)}:${padded(secs)}`;
+}
+function formatTotalHours(minutes) {
+  if (minutes < 1) return `0 min`;
+
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hrs === 0) return `${mins} min`;
+  if (mins === 0) return `${hrs}h`;
+
+  return `${hrs}h ${mins}m`;
+}
+
 
     const enrolledCourse = {
       courseId,
@@ -343,15 +357,16 @@ export const updateCourseResume = async (req, res, next) => {
   try {
     const userId = req.user._id;
     const { courseId } = req.params;
-    const { lastWatched = {}, watchedHours = 0 } = req.body;
+    const {
+      lastWatched = {},
+      watchedHours = 0,
+      completedContent = []
+    } = req.body;
 
     let courseStudent = await CourseStudent.findOne({ userId });
 
     if (!courseStudent) {
-      courseStudent = new CourseStudent({
-        userId,
-        enrolledCourses: []
-      });
+      courseStudent = new CourseStudent({ userId, enrolledCourses: [] });
     }
 
     let course = courseStudent.enrolledCourses.find(c => c.courseId === courseId);
@@ -363,10 +378,15 @@ export const updateCourseResume = async (req, res, next) => {
         progressPercent: 0,
         progress: false,
         isCompleted: false,
-        lastWatched: {}
+        lastWatched: {},
+        completedContent: []
       };
       courseStudent.enrolledCourses.push(course);
     }
+    const newCompleted = Array.from(new Set([
+      ...(course.completedContent || []),
+      ...(completedContent || [])
+    ]));
 
     course.watchedHours = watchedHours;
     course.lastWatched = {
@@ -374,13 +394,22 @@ export const updateCourseResume = async (req, res, next) => {
       topicIndex: lastWatched.topicIndex || 0,
       contentIndex: lastWatched.contentIndex || 0
     };
+    course.completedContent = newCompleted;
 
     const courseDetails = await Course.findById(courseId);
-    const totalHours = courseDetails?.totalHours || 1;
+    const modules = courseDetails?.modules || [];
 
-    course.progressPercent = Math.min(100, Math.round((watchedHours / totalHours) * 100));
-    course.progress = course.progressPercent > 0;
-    course.isCompleted = watchedHours >= totalHours;
+    const totalContents = modules.reduce((sum, mod) =>
+      sum + (mod.topics || []).reduce((s, t) => s + (t.contents?.length || 0), 0), 0
+    );
+
+    const progressPercent = totalContents
+      ? Math.round((newCompleted.length / totalContents) * 100)
+      : 0;
+
+    course.progressPercent = progressPercent;
+    course.progress = progressPercent > 0;
+    course.isCompleted = progressPercent === 100;
 
     if (typeof courseStudent.updateGlobalProgress === "function") {
       courseStudent.updateGlobalProgress();
@@ -391,11 +420,17 @@ export const updateCourseResume = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: "Resume updated",
-      resume: course.lastWatched
+      resume: {
+        lastWatched: course.lastWatched,
+        completedContent: course.completedContent,
+        watchedHours: course.watchedHours,
+        progressPercent: course.progressPercent,
+      }
     });
 
   } catch (err) {
-    next(err); 
+    console.error("❌ updateCourseResume error:", err);
+    next(err);
   }
 };
 // ✅ Update watched progress
@@ -437,6 +472,10 @@ export const updateCourseStudent = async (req, res, next) => {
     if (courseIndex === -1) {
       return res.status(404).json({ message: "Enrolled course not found" });
     }
+    const existingCourse = courseStudent.enrolledCourses[courseIndex];
+    const originalTitle = existingCourse.title;
+    const originalImage = existingCourse.image;
+    const originalPreviewVideo = existingCourse.previewVideo;
 
     const {
       badge,
@@ -446,76 +485,95 @@ export const updateCourseStudent = async (req, res, next) => {
       finalTest: rawFinalTest,
     } = req.body;
 
-    const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags;
-    const parsedModules =
-      typeof rawModules === "string" ? JSON.parse(rawModules) : rawModules;
-    const parsedFinalTest =
-      typeof rawFinalTest === "string"
-        ? JSON.parse(rawFinalTest)
-        : rawFinalTest;
+    let parsedTags = [];
+    let parsedModules = [];
+    let parsedFinalTest = null;
+
+    try {
+      parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags || [];
+      parsedModules =
+        typeof rawModules === "string" ? JSON.parse(rawModules) : rawModules || [];
+      parsedFinalTest =
+        typeof rawFinalTest === "string" ? JSON.parse(rawFinalTest) : rawFinalTest || null;
+    } catch (error) {
+      return res.status(400).json({ message: "Invalid JSON in form data." });
+    }
 
     let totalDuration = 0;
     let assessments = 0;
     let assignments = 0;
-    let totalQuestions = 0;
+    const totalQuestions = parsedFinalTest?.questions?.length || 0;
 
-    const modules = await Promise.all(parsedModules.map(async (mod, mIndex) => ({
-      moduleTitle: mod.moduleTitle,
-      description: mod.description,
-      completed: mod.completed || false,
-      topics: await Promise.all((mod.topics || []).map(async (topic, tIndex) => {
-        const updatedContents = await Promise.all((topic.contents || []).map(async (content, cIndex) => {
-          const fieldPrefix = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
-          const matchedFile = s3Uploads.find(file => file.field === fieldPrefix);
+    const modules = await Promise.all(
+      parsedModules.map(async (mod, mIndex) => ({
+        moduleTitle: mod.moduleTitle,
+        description: mod.description,
+        completed: mod.completed || false,
+        topics: await Promise.all(
+          (mod.topics || []).map(async (topic, tIndex) => {
+            const updatedContents = await Promise.all(
+              (topic.contents || []).map(async (content, cIndex) => {
+                const fieldName = `content-${content.type}-${mIndex}-${tIndex}-${cIndex}`;
+                const matchedFile = s3Uploads.find((f) => f.field === fieldName);
 
-          const duration = Number(content.duration) || 0;
-          totalDuration += duration;
-          assessments++;
+                const oldUrl = content.url || "";
+                const duration = Number(content.duration) || 0;
+                totalDuration += duration;
+                assessments++;
 
-          let url = content.url || "";
-          let name = content.name || "";
-          if (matchedFile) {
-            if (content.url) {
-              await deleteS3File(content.url); 
-            }
-            url = matchedFile.url;
-            name = matchedFile.originalName;
-          }
+                let url = oldUrl;
+                let name = content.name || "";
 
-          const questions = (content.questions || []).map(q => ({
-            question: q.question,
-            options: q.options,
-            answer: q.answer,
-            selectedAnswer: q.selectedAnswer || "",
-            multiSelect: q.multiSelect || false,
-            isCorrect: q.isCorrect || false,
-          }));
+                if (matchedFile) {
+                  if (oldUrl) {
+                    try {
+                      await deleteS3File(oldUrl);
+                      console.log("🗑️ Deleted old file:", oldUrl);
+                    } catch (err) {
+                      console.warn("⚠️ Failed to delete old S3 file:", err.message);
+                    }
+                  }
 
-          if (questions.length > 0) {
-            assignments++;
-            totalQuestions += questions.length;
-          }
+                  url = matchedFile.url;
+                  name = matchedFile.originalName;
+                }
 
-          return {
-            type: content.type,
-            name,
-            duration,
-            pages: content.pages || "",
-            url,
-            completed: content.completed || false,
-            score: content.score || 0,
-            questions,
-          };
-        }));
+                const questions = (content.questions || []).map((q) => {
+                  return {
+                    question: q.question,
+                    options: q.options,
+                    answer: q.answer,
+                    selectedAnswer: q.selectedAnswer || "",
+                    multiSelect: q.multiSelect || false,
+                    isCorrect: q.isCorrect || false,
+                  };
+                });
 
-        return {
-          topicId: topic.topicId || uuidv4(),
-          topicTitle: topic.topicTitle,
-          completed: topic.completed || false,
-          contents: updatedContents,
-        };
+                if (questions.length > 0) assignments++;
+
+                return {
+                  type: content.type,
+                  name,
+                  url,
+                  duration,
+                  pages: content.pages || "",
+                  completed: content.completed || false,
+                  score: content.score || 0,
+                  questions,
+                };
+              })
+            );
+
+            return {
+              topicId: topic.topicId || uuidv4(),
+              topicTitle: topic.topicTitle,
+              completed: topic.completed || false,
+              contents: updatedContents,
+            };
+          })
+        ),
       }))
-    })));
+    );
 
     const finalTest = parsedFinalTest
       ? {
@@ -523,29 +581,44 @@ export const updateCourseStudent = async (req, res, next) => {
           type: "test",
           completed: parsedFinalTest.completed || false,
           score: parsedFinalTest.score || 0,
-          questions: (parsedFinalTest.questions || []).map((q) => ({
-            question: q.question,
-            options: q.options,
-            answer: q.answer,
-            selectedAnswer: q.selectedAnswer || "",
-            multiSelect: q.multiSelect || false,
-            isCorrect: q.isCorrect || false,
-          })),
+          questions: (parsedFinalTest.questions || []).map((q) => {
+            return {
+              question: q.question,
+              options: q.options,
+              answer: q.answer,
+              selectedAnswer: q.selectedAnswer || "",
+              multiSelect: q.multiSelect || false,
+              isCorrect: q.isCorrect || false,
+            };
+          }),
         }
       : null;
+function formatDuration(seconds) {
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
 
-    const formatTotalHours = (minutes) => {
-      if (minutes < 60) return `${minutes} min`;
-      const hrs = Math.floor(minutes / 60);
-      const mins = minutes % 60;
-      return `${hrs}h${mins > 0 ? ` ${mins}m` : ""}`;
-    };
+  const padded = (n) => String(n).padStart(2, '0');
+  return `${padded(hrs)}:${padded(mins)}:${padded(secs)}`;
+}
+function formatTotalHours(minutes) {
+  if (minutes < 1) return `0 min`;
+
+  const hrs = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+
+  if (hrs === 0) return `${mins} min`;
+  if (mins === 0) return `${hrs}h`;
+
+  return `${hrs}h ${mins}m`;
+}
+
 
     const updatedCourse = {
-      ...courseStudent.enrolledCourses[courseIndex],
+      ...existingCourse, 
       badge: badge || "",
       level: level || "Beginner",
-      tags: parsedTags || [],
+      tags: parsedTags,
       totalHours: totalDuration,
       totalHoursDisplay: formatTotalHours(totalDuration),
       assessments,
@@ -554,10 +627,13 @@ export const updateCourseStudent = async (req, res, next) => {
       modules,
       finalTest,
       updatedAt: new Date(),
+      courseId,
+      title: originalTitle,
+      image: originalImage,
+      previewVideo: originalPreviewVideo,
     };
 
     courseStudent.enrolledCourses[courseIndex] = updatedCourse;
-
     courseStudent.updateGlobalProgress?.();
 
     const saved = await courseStudent.save();
@@ -571,74 +647,57 @@ export const updateCourseStudent = async (req, res, next) => {
     next(err);
   }
 };
+
 // ✅ Delete CourseStudent (admin)
-export const deleteCourseStudent  = async (req, res, next) => {
+export const deleteCourseStudent = async (req, res, next) => {
   try {
     const userId = req.user?.id;
     const { courseId } = req.params;
 
-    if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    if (!courseId) return res.status(400).json({ message: "Missing courseId" });
-
     const courseStudent = await CourseStudent.findOne({ userId });
     if (!courseStudent) {
-      return res.status(404).json({ message: "User enrollment record not found" });
+      return res.status(404).json({ message: "CourseStudent not found" });
     }
 
-    const courseIndex = courseStudent.enrolledCourses.findIndex(
+    const enrolledIndex = courseStudent.enrolledCourses.findIndex(
       (c) => c.courseId === courseId
     );
 
-    if (courseIndex === -1) {
-      return res.status(404).json({ message: "Course not found in enrollment" });
+    if (enrolledIndex === -1) {
+      return res.status(404).json({ message: "Course not enrolled" });
     }
 
-    const enrolledCourse = courseStudent.enrolledCourses[courseIndex];
-    const s3Keys = [];
+    const enrolledCourse = courseStudent.enrolledCourses[enrolledIndex];
 
+    // 🧹 Delete all S3 files tied to this course
     for (const mod of enrolledCourse.modules || []) {
       for (const topic of mod.topics || []) {
         for (const content of topic.contents || []) {
-          if (content.url && content.url.includes("amazonaws.com")) {
-            let folder = "";
-
-            if (content.type === "image") folder = "modules/images";
-            else if (content.type === "audio") folder = "modules/audios";
-            else if (content.type === "video") folder = "modules/videos";
-            else if (content.type === "pdf") folder = "modules/pdfs";
-
-            const key = content.url.split(`.amazonaws.com/`)[1];
-            if (key?.startsWith(folder)) {
-              s3Keys.push(key);
-            }
+          if (content.url) {
+            await deleteS3File(content.url);
           }
         }
       }
     }
 
-    if (enrolledCourse.image?.includes("amazonaws.com")) {
-      const imageKey = enrolledCourse.image.split(`.amazonaws.com/`)[1];
-      if (imageKey?.startsWith("courses/images")) {
-        s3Keys.push(imageKey);
+    // 🧪 Final test cleanup if applicable
+    if (enrolledCourse.finalTest) {
+      for (const q of enrolledCourse.finalTest.questions || []) {
+        if (q?.attachmentUrl) {
+          await deleteS3File(q.attachmentUrl);
+        }
       }
     }
-    for (const key of s3Keys) {
-      try {
-        await deleteS3File(key);
-      } catch (err) {
-        console.warn("⚠️ Failed to delete file from S3:", key, err.message);
-      }
-    }
-    courseStudent.enrolledCourses.splice(courseIndex, 1);
+
+    // ❌ Remove course from enrolledCourses
+    courseStudent.enrolledCourses.splice(enrolledIndex, 1);
     courseStudent.updateGlobalProgress?.();
+
     await courseStudent.save();
 
-    return res.status(200).json({
-      success: true,
-      message: "✅ Course and associated files deleted from S3.",
-    });
+    res.status(200).json({ message: "✅ Course deleted successfully" });
   } catch (err) {
-    console.error("❌ deleteEnrolledCourse error:", err);
+    console.error("❌ Failed to delete courseStudent:", err);
     next(err);
   }
 };
@@ -711,3 +770,4 @@ export const addFinalTestToCourse = async (req, res, next) => {
     next(error);
   }
 };
+
