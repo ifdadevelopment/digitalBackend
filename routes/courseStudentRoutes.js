@@ -33,12 +33,11 @@ courseStudentRouter.post(
 courseStudentRouter.get("/:courseId", verifyUser, getCourseResume);
 courseStudentRouter.post("/finalTest", verifyUser, addFinalTestToCourse);
 courseStudentRouter.put("/:courseId", verifyUser, updateCourseResume);
-courseStudentRouter.put("enrolled/:courseId",   upload.any(),
+courseStudentRouter.put("enrolled/:courseId",   upload.any(),verifyUser,isAdmin,
   multerErrorHandler,
-  extractS3Uploads, isAdmin, updateCourseStudent);
+  extractS3Uploads,  updateCourseStudent);
 courseStudentRouter.patch("/progress/:id", verifyUser, updateProgress);
-courseStudentRouter.delete("/:id", isAdmin, deleteCourseStudent);
+courseStudentRouter.delete("/:courseId", isAdmin, deleteCourseStudent);
 
 
 export default courseStudentRouter;
-

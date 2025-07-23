@@ -572,14 +572,73 @@ export const updateCourseStudent = async (req, res, next) => {
   }
 };
 // ✅ Delete CourseStudent (admin)
-export const deleteCourseStudent = async (req, res, next) => {
+export const deleteCourseStudent  = async (req, res, next) => {
   try {
-    const { id } = req.params;
-    const deleted = await CourseStudent.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ message: "Not found." });
+    const userId = req.user?.id;
+    const { courseId } = req.params;
 
-    res.status(200).json({ message: "Deleted successfully." });
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!courseId) return res.status(400).json({ message: "Missing courseId" });
+
+    const courseStudent = await CourseStudent.findOne({ userId });
+    if (!courseStudent) {
+      return res.status(404).json({ message: "User enrollment record not found" });
+    }
+
+    const courseIndex = courseStudent.enrolledCourses.findIndex(
+      (c) => c.courseId === courseId
+    );
+
+    if (courseIndex === -1) {
+      return res.status(404).json({ message: "Course not found in enrollment" });
+    }
+
+    const enrolledCourse = courseStudent.enrolledCourses[courseIndex];
+    const s3Keys = [];
+
+    for (const mod of enrolledCourse.modules || []) {
+      for (const topic of mod.topics || []) {
+        for (const content of topic.contents || []) {
+          if (content.url && content.url.includes("amazonaws.com")) {
+            let folder = "";
+
+            if (content.type === "image") folder = "modules/images";
+            else if (content.type === "audio") folder = "modules/audios";
+            else if (content.type === "video") folder = "modules/videos";
+            else if (content.type === "pdf") folder = "modules/pdfs";
+
+            const key = content.url.split(`.amazonaws.com/`)[1];
+            if (key?.startsWith(folder)) {
+              s3Keys.push(key);
+            }
+          }
+        }
+      }
+    }
+
+    if (enrolledCourse.image?.includes("amazonaws.com")) {
+      const imageKey = enrolledCourse.image.split(`.amazonaws.com/`)[1];
+      if (imageKey?.startsWith("courses/images")) {
+        s3Keys.push(imageKey);
+      }
+    }
+    for (const key of s3Keys) {
+      try {
+        await deleteS3File(key);
+      } catch (err) {
+        console.warn("⚠️ Failed to delete file from S3:", key, err.message);
+      }
+    }
+    courseStudent.enrolledCourses.splice(courseIndex, 1);
+    courseStudent.updateGlobalProgress?.();
+    await courseStudent.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "✅ Course and associated files deleted from S3.",
+    });
   } catch (err) {
+    console.error("❌ deleteEnrolledCourse error:", err);
     next(err);
   }
 };
@@ -652,4 +711,3 @@ export const addFinalTestToCourse = async (req, res, next) => {
     next(error);
   }
 };
-
