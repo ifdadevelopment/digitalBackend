@@ -15,14 +15,19 @@ const PORT = process.env.PORT || 5000;
 const CLIENT_URL =
   process.env.NODE_ENV === "production"
     ? process.env.CLIENT_URL_PROD
-    : process.env.CLIENT_URL_DEV;
+    : process.env.CLIENT_URL;
 
+const ADMIN_URL =
+  process.env.NODE_ENV === "production"
+    ? process.env.ADMIN_URL_PROD
+    : process.env.ADMIN_URL;
 const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:5174",
-  "http://localhost:4173",
-  "https://digitalmarketing890.netlify.app",
-  "https://digitaladmin.netlify.app"
+  "http://localhost:5173", 
+  "http://localhost:5174", 
+  "http://localhost:4173", 
+  CLIENT_URL, 
+  ADMIN_URL,  
+
 ];
 
 app.use(
@@ -39,8 +44,6 @@ app.use(
     credentials: true,
   })
 );
-
-console.log(`CORS Origin: ${CLIENT_URL}`);
 app.options("*", cors());
 app.use(express.json({ limit: "4gb" }));
 app.use(express.urlencoded({ extended: true, limit: "4gb" }));

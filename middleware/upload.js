@@ -40,9 +40,13 @@ export const getUploadMiddleware = (fieldConfig = null) => {
 };
 
 // Upload to S3 from disk
+const cloudfrontUrl =
+  process.env.NODE_ENV === "production"
+    ? process.env.CLOUDFRONT_URL_PROD
+    : process.env.CLOUDFRONT_URL_DEV;
+
 export const extractS3Uploads = async (req, res, next) => {
   const bucket = process.env.AWS_BUCKET_NAME;
-  const region = process.env.AWS_REGION;
   const uploads = [];
 
   const files = Array.isArray(req.files)
@@ -63,7 +67,6 @@ export const extractS3Uploads = async (req, res, next) => {
         .replace(/[^a-zA-Z0-9_-]/g, "");
 
       let folder = "others";
-
       if (file.fieldname.startsWith("content-image")) folder = "modules/images";
       else if (file.fieldname.startsWith("content-audio")) folder = "modules/audios";
       else if (file.fieldname.startsWith("content-video")) folder = "modules/videos";
@@ -86,12 +89,15 @@ export const extractS3Uploads = async (req, res, next) => {
           Key: key,
           Body: fileBuffer,
           ContentType: file.mimetype,
+          CacheControl: "public, max-age=31536000", 
         })
       );
 
+      const publicUrl = `${cloudfrontUrl}/${key}`;
+
       uploads.push({
         field: file.fieldname,
-        url: `https://${bucket}.s3.${region}.amazonaws.com/${key}`,
+        url: publicUrl,
         key,
         originalName: file.originalname,
         type: file.mimetype,
@@ -105,10 +111,12 @@ export const extractS3Uploads = async (req, res, next) => {
     next();
   } catch (err) {
     console.error("❌ S3 Upload Error:", err);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: "S3 upload failed",
       error: err.message,
     });
   }
 };
+
+
