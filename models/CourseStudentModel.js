@@ -138,4 +138,5 @@ courseStudentSchema.methods.updateGlobalProgress = function () {
   this.globalProgressColor = color;
 };
 
-export default mongoose.model('CourseStudent', courseStudentSchema);
+const CourseStudent = mongoose.model('CourseStudent', courseStudentSchema);
+export default CourseStudent;

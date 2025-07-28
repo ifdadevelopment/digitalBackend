@@ -9,6 +9,7 @@ import paymentRouter from "./routes/paymentRoute.js";
 import courseStudentRouter from "./routes/courseStudentRoutes.js";
 import blogRouter from "./routes/blogRoutes.js";
 import cartRouter from "./routes/cartRoutes.js";
+import quizRouter from "./routes/quizAttemptRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -61,6 +62,8 @@ app.use("/api/payment", paymentRouter);
 app.use("/api/courseStudent", courseStudentRouter);
 app.use("/api/blogs", blogRouter);
 app.use("/api/carts", cartRouter);
+app.use("/api/quizzes", quizRouter);
+
 
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || 500;

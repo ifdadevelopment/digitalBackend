@@ -1,12 +1,10 @@
-
 import multer from "multer";
 import fs from "fs/promises";
 import os from "os";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-
-// AWS S3 setup
+import { getCloudFrontUrl } from "../utils/s3Helpers.js";
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -14,8 +12,6 @@ const s3 = new S3Client({
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-
-// Multer disk storage setup
 const diskStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, os.tmpdir());
@@ -25,25 +21,17 @@ const diskStorage = multer.diskStorage({
     cb(null, `${Date.now()}-${uuidv4()}-${safeName}`);
   },
 });
-
-// Multer instance
 const createMulter = (maxFileSize = 4 * 1024 * 1024 * 1024) =>
   multer({
     storage: diskStorage,
     limits: { fileSize: maxFileSize },
   });
-
-// Use `.fields()` or `.any()` dynamically
 export const getUploadMiddleware = (fieldConfig = null) => {
   const instance = createMulter();
   return fieldConfig ? instance.fields(fieldConfig) : instance.any();
 };
 
-// Upload to S3 from disk
-const cloudfrontUrl =
-  process.env.NODE_ENV === "production"
-    ? process.env.CLOUDFRONT_URL_PROD
-    : process.env.CLOUDFRONT_URL_DEV;
+const cloudfrontUrl = process.env.CLOUDFRONT_URL;
 
 export const extractS3Uploads = async (req, res, next) => {
   const bucket = process.env.AWS_BUCKET_NAME;
@@ -93,7 +81,7 @@ export const extractS3Uploads = async (req, res, next) => {
         })
       );
 
-      const publicUrl = `${cloudfrontUrl}/${key}`;
+      const publicUrl = getCloudFrontUrl(key);
 
       uploads.push({
         field: file.fieldname,
