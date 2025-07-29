@@ -307,27 +307,34 @@ export const getPurchasedEnrolledCourseDetailsByUser = async (req, res) => {
 // ✅ GET Resume Data for Specific Course
 export const getCourseResume = async (req, res, next) => {
   try {
-    const userId = req.user.id;
     const { courseId } = req.params;
+    const userId = req.user.id;
 
     const courseStudent = await CourseStudent.findOne({ userId });
 
+    // If no courseStudent document exists, return default resume
     if (!courseStudent) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course resume not found for user',
+      return res.status(200).json({
+        success: true,
+        message: 'No student data found, returning default resume',
+        resume: getDefaultResume(),
       });
     }
 
-    const course = courseStudent.enrolledCourses.find(c => c.courseId.toString() === courseId);
+    const course = courseStudent.enrolledCourses.find(
+      (c) => c.courseId.toString() === courseId
+    );
 
+    // If course is not found in user's enrolled list
     if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course progress not available for this courseId',
+      return res.status(200).json({
+        success: true,
+        message: 'No progress found for this course, returning default resume',
+        resume: getDefaultResume(),
       });
     }
 
+    // Return actual resume if available
     return res.status(200).json({
       success: true,
       message: 'Resume fetched successfully',
@@ -337,31 +344,39 @@ export const getCourseResume = async (req, res, next) => {
         lastWatched: course.lastWatched || {},
         progressPercent: course.progressPercent || 0,
         moduleProgress: course.moduleProgress || [],
-        isCompleted: course.isCompleted || false
-      }
+        isCompleted: course.isCompleted || false,
+      },
     });
-
   } catch (err) {
     console.error("❌ getCourseResume error:", err);
     return res.status(500).json({
       success: false,
       message: "Failed to fetch course resume",
-      error: err.message
+      error: err.message,
     });
   }
 };
 
-
+function getDefaultResume() {
+  return {
+    watchedHours: 0,
+    completedContent: [],
+    lastWatched: {},
+    progressPercent: 0,
+    moduleProgress: [],
+    isCompleted: false,
+  };
+}
 // ✅ Update Resume Progress and Last Watched
 export const updateCourseResume = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { courseId } = req.params;
+   const { courseId } = req.body;
 
     const {
       lastWatched = {},
       watchedHours = 0,
-      completedContent = [] 
+      completedContent = []
     } = req.body;
 
     let courseStudent = await CourseStudent.findOne({ userId });
@@ -385,28 +400,17 @@ export const updateCourseResume = async (req, res, next) => {
       courseStudent.enrolledCourses.push(course);
     }
 
-    // ✅ Merge completedContent
     const updatedCompletedContent = Array.from(new Set([
       ...(course.completedContent || []),
       ...(completedContent || [])
     ]));
     course.completedContent = updatedCompletedContent;
 
-    // ✅ Update watched hours
-    course.watchedHours += watchedHours;
-
-    // ✅ Update last watched
-    course.lastWatched = {
-      moduleIndex: lastWatched.moduleIndex || 0,
-      topicIndex: lastWatched.topicIndex || 0,
-      contentIndex: lastWatched.contentIndex || 0
-    };
-
-    // ✅ Get full course structure
-    const courseDetails = await Course.findById(courseId).select("modules");
+   const courseDetails = await Course.findOne({ id: courseId }).select("modules");
     const modules = courseDetails?.modules || [];
 
     let totalContents = 0;
+    let totalCompleted = 0;
     let totalDuration = 0;
     const moduleProgress = [];
 
@@ -416,11 +420,11 @@ export const updateCourseResume = async (req, res, next) => {
 
       mod.topics?.forEach((topic, topicIdx) => {
         topic.contents?.forEach((content, contentIdx) => {
-          const contentId = `module${modIdx}.topic${topicIdx}.${content.type}${contentIdx}`;
+          const contentId = `${modIdx}-${topicIdx}-${contentIdx}`;
           moduleContents++;
           totalContents++;
 
-          if (['video', 'audio'].includes(content.type)) {
+          if (["video", "audio"].includes(content.type)) {
             const dur = parseFloat(content.duration || 0);
             totalDuration += isNaN(dur) ? 0 : dur;
           }
@@ -441,8 +445,7 @@ export const updateCourseResume = async (req, res, next) => {
       });
     });
 
-    // ✅ Course-level progress
-    const totalCompleted = updatedCompletedContent.length;
+    totalCompleted = updatedCompletedContent.length;
     const overallProgressPercent = totalContents > 0
       ? Math.round((totalCompleted / totalContents) * 100)
       : 0;
@@ -450,15 +453,21 @@ export const updateCourseResume = async (req, res, next) => {
     course.progressPercent = overallProgressPercent;
     course.progress = overallProgressPercent > 0;
     course.isCompleted = overallProgressPercent === 100;
-
     course.moduleProgress = moduleProgress;
 
-    // ✅ Save totalHours if not set
+    const prevWatched = course.watchedHours || 0;
+    course.watchedHours = prevWatched + watchedHours;
+
+    course.lastWatched = {
+      moduleIndex: lastWatched.moduleIndex || 0,
+      topicIndex: lastWatched.topicIndex || 0,
+      contentIndex: lastWatched.contentIndex || 0
+    };
+
     if (!course.totalHours) {
       course.totalHours = totalDuration;
     }
 
-    // ✅ Update global progress
     if (typeof courseStudent.updateGlobalProgress === 'function') {
       courseStudent.updateGlobalProgress();
     }
@@ -486,6 +495,7 @@ export const updateCourseResume = async (req, res, next) => {
     });
   }
 };
+
 
 // ✅ Update watched progress
 export const updateProgress = async (req, res, next) => {

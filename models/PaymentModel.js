@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const PaymentTempSchema = new mongoose.Schema(
   {
     userId: {
@@ -23,9 +24,18 @@ const PaymentTempSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    coupon: {
+      type: String,
+      default: "", 
+    },
+    discountPercentage: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
+
 const PaymentSchema = new mongoose.Schema(
   {
     user: {
@@ -38,16 +48,25 @@ const PaymentSchema = new mongoose.Schema(
         title: String,
         price: Number,
         salePrice: Number,
-        image: String, 
+        image: String,
       },
     ],
     razorpay_order_id: String,
     razorpay_payment_id: String,
     amountPaid: Number,
     paymentMethod: String,
+    coupon: {
+      type: String,
+      default: "", 
+    },
+    discountPercentage: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );
 
+// Exporting both models
 export const PaymentTemp = mongoose.model("PaymentTemp", PaymentTempSchema);
 export default mongoose.model("Payment", PaymentSchema);

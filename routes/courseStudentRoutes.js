@@ -32,7 +32,7 @@ courseStudentRouter.post(
 );
 courseStudentRouter.get("/:courseId", verifyUser, getCourseResume);
 courseStudentRouter.post("/finalTest", verifyUser, addFinalTestToCourse);
-courseStudentRouter.put("/:courseId", verifyUser, updateCourseResume);
+courseStudentRouter.put("resume/:courseId", verifyUser, updateCourseResume);
 courseStudentRouter.put("/enrolled/:courseId",   upload.any(),verifyUser,isAdmin,
   multerErrorHandler,
   extractS3Uploads,  updateCourseStudent);

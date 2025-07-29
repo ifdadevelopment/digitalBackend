@@ -16,12 +16,7 @@ export const saveOrUpdateAttempt = async (req, res) => {
   try {
     const userId = req.user.id;
     const { courseId } = req.params;
-    const {
-      courseTitle,
-      quizData,
-      isFinalTest,
-      allModulesCompleted,
-    } = req.body;
+  const { quizId, score, userAnswers, quizTitle, totalQuestions } = req.body;
 
     let userAttempt = await QuizAttempt.findOne({ userId, courseId });
 

@@ -7,24 +7,27 @@ import axios from "axios";
 // Create Razorpay Order and save temp
 export const createOrder = async (req, res) => {
   try {
-    const { amount, userId, cartItems } = req.body;
+    const { amount, userId, cartItems, coupon = "", discountPercentage = 0 } = req.body;
 
     if (!amount || !userId || !Array.isArray(cartItems) || cartItems.length === 0) {
       return res.status(400).json({ success: false, message: "Required fields missing" });
     }
 
     const options = {
-      amount: amount * 100,
+      amount: amount * 100, 
       currency: "INR",
       receipt: `receipt_${Date.now()}`,
     };
 
     const order = await razorpay.orders.create(options);
+
     await PaymentTemp.create({
       userId,
       cartItems,
       razorpay_order_id: order.id,
       amount,
+      coupon,
+      discountPercentage,
     });
 
     return res.status(200).json({
@@ -83,6 +86,8 @@ export const verifyPayment = async (req, res) => {
       razorpay_payment_id,
       amountPaid: temp.amount,
       paymentMethod: paymentDetails.method || "unknown",
+      coupon: temp.coupon || "",
+      discountPercentage: temp.discountPercentage || 0,
     });
 
     await PaymentTemp.deleteOne({ _id: temp._id });
@@ -98,6 +103,8 @@ export const verifyPayment = async (req, res) => {
         orderId: razorpay_order_id,
         paymentId: razorpay_payment_id,
         date: payment.createdAt,
+        coupon: payment.coupon || "",
+        discount: payment.discountPercentage || 0,
         courses: temp.cartItems.map((c) => ({
           id: c.courseId,
           title: c.title,
@@ -133,11 +140,13 @@ export const getPaymentsByUser = async (req, res) => {
         paymentMethod: p.paymentMethod,
         date: p.createdAt,
         amountPaid: p.amountPaid,
+        coupon: p.coupon || "",
+        discountPercentage: p.discountPercentage || 0,
         courses: p.cartItems.map((c) => ({
           id: c.courseId,
           title: c.title,
           price: c.salePrice || c.price,
-          image: c.image || "", 
+          image: c.image || "",
         })),
       })),
     });
@@ -146,9 +155,7 @@ export const getPaymentsByUser = async (req, res) => {
   }
 };
 
-// get all payment details for admin 
-
-
+// Get All Successful Payments (Admin)
 export const getAllSuccessfulPayments = async (req, res) => {
   try {
     const payments = await Payment.find().sort({ createdAt: -1 });
@@ -162,11 +169,12 @@ export const getAllSuccessfulPayments = async (req, res) => {
         orderId: payment.razorpay_order_id || "",
         amount: payment.amountPaid || 0,
         method: payment.paymentMethod || "Unknown",
+        coupon: payment.coupon || "",
+        discountPercentage: payment.discountPercentage || 0,
         createdAt: payment.createdAt,
       }));
     });
 
-    // Flatten array (since cartItems is an array per payment)
     const flatPayments = enrichedPayments.flat();
 
     res.status(200).json({
