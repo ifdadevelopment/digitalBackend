@@ -1,31 +1,40 @@
 import mongoose from "mongoose";
-const quizReportSchema = new mongoose.Schema(
+const attemptSchema = new mongoose.Schema(
   {
-    quizName: String,
-    totalQuestions: Number,
-    correct: Number,   
-    incorrect: Number,     
-    percent: Number,       
-    attempts: [Number],
-    maxScore: Number,
-    lastScore: Number,
-    lastUserAnswers: { type: mongoose.Schema.Types.Mixed, default: {} },
+    score: { type: Number, required: true },
+    timestamp: { type: Date, default: Date.now },
+    userAnswers: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { _id: false }
 );
-
+const quizReportSchema = new mongoose.Schema(
+  {
+    quizName: { type: String, required: true },
+    totalQuestions: { type: Number, default: 0 },
+    correct: { type: Number, default: 0 },
+    incorrect: { type: Number, default: 0 },
+    percent: { type: Number, default: 0 },
+    maxScore: { type: Number, default: 0 },
+    lastScore: { type: Number, default: 0 },
+    lastUserAnswers: { type: mongoose.Schema.Types.Mixed, default: {} },
+    attempts: { type: [attemptSchema], default: [] },
+  },
+  { _id: false }
+);
 const testDataSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
+   userId: {
+  type: String, 
+  required: true
+},
     courseId: {
       type: String,
-      required: true,
+      required: false,
     },
-    certificates: { type: [String], default: [] },
+    certificates: {
+      type: [String],
+      default: [],
+    },
     score: {
       type: Map,
       of: Number,
@@ -36,14 +45,14 @@ const testDataSchema = new mongoose.Schema(
       of: mongoose.Schema.Types.Mixed,
       default: {},
     },
-    quizReports: {
-      type: Map,
-      of: quizReportSchema,
-      default: {},
-    },
     attemptCount: {
       type: Map,
       of: Number,
+      default: {},
+    },
+    quizReports: {
+      type: Map,
+      of: quizReportSchema,
       default: {},
     },
     completedContent: {
