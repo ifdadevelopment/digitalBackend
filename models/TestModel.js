@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+
 const attemptSchema = new mongoose.Schema(
   {
     score: { type: Number, required: true },
@@ -7,6 +8,7 @@ const attemptSchema = new mongoose.Schema(
   },
   { _id: false }
 );
+
 const quizReportSchema = new mongoose.Schema(
   {
     quizName: { type: String, required: true },
@@ -17,19 +19,19 @@ const quizReportSchema = new mongoose.Schema(
     maxScore: { type: Number, default: 0 },
     lastScore: { type: Number, default: 0 },
     lastUserAnswers: { type: mongoose.Schema.Types.Mixed, default: {} },
-    attempts: { type: [attemptSchema], default: [] },
+    attempts: { type: [attemptSchema], default: [] }, 
   },
   { _id: false }
 );
+
 const testDataSchema = new mongoose.Schema(
   {
-   userId: {
-  type: String, 
-  required: true
-},
+    userId: {
+      type: String,
+      required: true,
+    },
     courseId: {
       type: String,
-      required: false,
     },
     certificates: {
       type: [String],
@@ -73,6 +75,22 @@ const testDataSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+testDataSchema.pre("save", function (next) {
+  const quizReports = this.quizReports || new Map();
+  const attemptCount = this.attemptCount || new Map();
+
+  quizReports.forEach((report, quizId) => {
+    if (Array.isArray(report.attempts)) {
+      if (report.attempts.length > 3) {
+        report.attempts = report.attempts.slice(-3); 
+      }
+      attemptCount.set(quizId, report.attempts.length);
+    }
+  });
+
+  this.attemptCount = attemptCount;
+  next();
+});
 
 testDataSchema.index({ userId: 1, courseId: 1 }, { unique: true });
 

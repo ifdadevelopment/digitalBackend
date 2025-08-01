@@ -12,6 +12,7 @@ import cartRouter from "./routes/cartRoutes.js";
 import quizRouter from "./routes/quizAttemptRoutes.js";
 import couponRouter from "./routes/couponsRoute.js";
 import testRouter from "./routes/TestRoutes.js";
+import otpRouter from "./routes/otpRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,6 +68,7 @@ app.use("/api/carts", cartRouter);
 app.use("/api/quizzes", quizRouter);
 app.use("/api/coupons", couponRouter);
 app.use("/api/tests", testRouter);
+app.use("/api/otp", otpRouter);
 
 
 app.use((err, req, res, next) => {

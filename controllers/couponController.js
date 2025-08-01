@@ -68,3 +68,24 @@ export const listCoupons = async (req, res) => {
     }))
   );
 };
+
+// ✅ NEW: Delete a coupon by code
+export const deleteCoupon = async (req, res) => {
+  const { code } = req.params;
+
+  if (!code || !/^BDS[0-9A-Z]{5}$/.test(code)) {
+    return res.status(400).json({ message: "❌ Invalid coupon code format" });
+  }
+
+  try {
+    const deleted = await Coupon.findOneAndDelete({ code });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "❌ Coupon not found" });
+    }
+
+    res.json({ message: `🗑️ Coupon "${code}" deleted successfully` });
+  } catch (err) {
+    res.status(500).json({ message: "❌ Error deleting coupon", error: err.message });
+  }
+};

@@ -4,6 +4,6 @@ import { verifyUser } from "../middleware/auth.js";
 
 const testRouter = express.Router();
 testRouter.post("/save", saveTestData);
-testRouter.get("/get", getTestData);
+testRouter.get("/test/get", getTestData);
 
 export default testRouter;

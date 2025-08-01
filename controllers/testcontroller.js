@@ -11,9 +11,8 @@ export const saveTestData = async (req, res, next) => {
       quizId,
       score = null,
       userAnswers = null,
-      attemptCount = null,
-      report: quizReport = null,
       courseId = null,
+      report: quizReport = null,
     } = req.body;
 
     if (!userId || !quizId) {
@@ -27,12 +26,15 @@ export const saveTestData = async (req, res, next) => {
       testData = new TestData({ userId, courseId });
     }
 
-    if (score !== null) testData.score.set(safeQuizId, score);
-    if (userAnswers) testData.userAnswers.set(safeQuizId, userAnswers);
-    if (attemptCount !== null) testData.attemptCount.set(safeQuizId, attemptCount);
-    const defaultReport = {
-      quizName: quizId,
-      totalQuestions: 0,
+    const attempt = quizReport?.attempts?.[0];
+
+    if (!attempt) {
+      return res.status(400).json({ error: "Missing attempt data in report." });
+    }
+
+    const existingReport = testData.quizReports.get(safeQuizId) || {
+      quizName: quizReport?.quizName || quizId,
+      totalQuestions: quizReport?.totalQuestions || 0,
       attempts: [],
       maxScore: 0,
       lastScore: 0,
@@ -41,56 +43,47 @@ export const saveTestData = async (req, res, next) => {
       incorrect: 0,
       percent: 0,
     };
+    const updatedAttempts = [...(existingReport.attempts || []), attempt];
+    if (updatedAttempts.length > 3) {
+      updatedAttempts.splice(0, updatedAttempts.length - 3);
+    }
 
-    const existingReport = testData.quizReports.get(safeQuizId) || defaultReport;
-
-    const incomingAttempt = quizReport?.attempts?.[0];
-    const updatedAttempts = [
-      ...(existingReport.attempts || []),
-      ...(incomingAttempt ? [incomingAttempt] : []),
-    ];
+    const maxScore = Math.max(existingReport.maxScore, quizReport?.maxScore ?? attempt.score ?? 0);
 
     const updatedReport = {
       quizName: quizReport?.quizName || existingReport.quizName || quizId,
       totalQuestions: quizReport?.totalQuestions ?? existingReport.totalQuestions ?? 0,
       attempts: updatedAttempts,
-      maxScore: Math.max(existingReport.maxScore ?? 0, quizReport?.maxScore ?? 0),
-      lastScore: quizReport?.lastScore ?? existingReport.lastScore ?? 0,
-      lastUserAnswers: quizReport?.lastUserAnswers ?? existingReport.lastUserAnswers ?? {},
+      maxScore,
+      lastScore: attempt.score,
+      lastUserAnswers: attempt.userAnswers || {},
       correct: quizReport?.correct ?? 0,
       incorrect: quizReport?.incorrect ?? 0,
       percent: quizReport?.percent ?? 0,
     };
 
     testData.quizReports.set(safeQuizId, updatedReport);
+    testData.attemptCount.set(safeQuizId, updatedAttempts.length);
+    testData.score.set(safeQuizId, attempt.score);
+    testData.userAnswers.set(safeQuizId, attempt.userAnswers || {});
 
     await testData.save();
 
     return res.status(200).json({
       message: "✅ Test data saved successfully",
+      quizId,
       data: {
         quizReports: Object.fromEntries(testData.quizReports),
         userAnswers: Object.fromEntries(testData.userAnswers),
         score: Object.fromEntries(testData.score),
         attemptCount: Object.fromEntries(testData.attemptCount),
       },
-      quizId,
     });
   } catch (err) {
     console.error("❌ Error saving test data:", err);
     next(err);
   }
 };
-
-
-
-const convertMapToObj = (map) => {
-  if (!map || typeof map !== 'object') return null;
-  if (typeof map.get === 'function') return Object.fromEntries(map);
-  return map;
-};
-
-
 
 export const getTestData = async (req, res, next) => {
   try {
@@ -104,39 +97,35 @@ export const getTestData = async (req, res, next) => {
     const query = { userId };
     if (courseId) query.courseId = courseId;
 
-    const testData = await TestData.findOne(query).lean();
-
-    if (!testData) {
+    const testDataDoc = await TestData.findOne(query);
+    if (!testDataDoc) {
       return res.status(200).json({
         quizId,
-        userAnswers: null,
-        score: null,
-        attemptCount: null,
-        quizReport: null,
+        userAnswers: {},
+        score: {},
+        attemptCount: {},
+        quizReports: {},
         progressPercentage: 0,
         isCompleted: false,
       });
     }
 
-    const {
+    // Convert Maps to plain objects
+    const userAnswers = Object.fromEntries(testDataDoc.userAnswers || []);
+    const score = Object.fromEntries(testDataDoc.score || []);
+    const attemptCount = Object.fromEntries(testDataDoc.attemptCount || []);
+    const quizReports = Object.fromEntries(testDataDoc.quizReports || []);
+    const completedContent = testDataDoc.completedContent || {};
+
+    const quizData = {
       userAnswers,
       score,
       attemptCount,
       quizReports,
-      completedContent,
-    } = testData;
-
-    const quizData = {
-      userAnswers: userAnswers?.[safeQuizId] ?? null,
-      score: score?.[safeQuizId] ?? null,
-      attemptCount: attemptCount?.[safeQuizId] ?? null,
-      quizReport: quizReports?.[safeQuizId] ?? null,
     };
 
-    const totalContent = completedContent ? Object.keys(completedContent).length : 0;
-    const completedCount = completedContent
-      ? Object.values(completedContent).filter(Boolean).length
-      : 0;
+    const totalContent = Object.keys(completedContent).length;
+    const completedCount = Object.values(completedContent).filter(Boolean).length;
 
     const progressPercentage = totalContent
       ? Math.round((completedCount / totalContent) * 100)
@@ -155,5 +144,4 @@ export const getTestData = async (req, res, next) => {
     next(err);
   }
 };
-
 
