@@ -1,4 +1,3 @@
-
 import dotenv from "dotenv";
 import pkg from "twilio";
 
@@ -27,16 +26,18 @@ export const sendOtp = async (req, res) => {
   otpStore.set(phone, otp);
 
   try {
-    await twilioClient.messages.create({
+    const message = await twilioClient.messages.create({
       body: `Banaras Digital Solution\nYour OTP is: ${otp}`,
       from: process.env.TWILIO_PHONE_NUMBER,
       to: phone,
     });
 
+    console.log("OTP sent:", message.sid);
+
     res.status(200).json({ message: "OTP sent successfully" });
   } catch (error) {
     console.error("Twilio Error:", error.message);
-    res.status(500).json({ message: "Failed to send OTP" });
+    res.status(500).json({ message: "Failed to send OTP", error: error.message });
   }
 };
 

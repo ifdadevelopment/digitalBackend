@@ -109,8 +109,6 @@ export const getTestData = async (req, res, next) => {
         isCompleted: false,
       });
     }
-
-    // Convert Maps to plain objects
     const userAnswers = Object.fromEntries(testDataDoc.userAnswers || []);
     const score = Object.fromEntries(testDataDoc.score || []);
     const attemptCount = Object.fromEntries(testDataDoc.attemptCount || []);
