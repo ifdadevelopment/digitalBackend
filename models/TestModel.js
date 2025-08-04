@@ -19,7 +19,17 @@ const quizReportSchema = new mongoose.Schema(
     maxScore: { type: Number, default: 0 },
     lastScore: { type: Number, default: 0 },
     lastUserAnswers: { type: mongoose.Schema.Types.Mixed, default: {} },
-    attempts: { type: [attemptSchema], default: [] }, 
+    attempts: {
+  type: [attemptSchema],
+  default: [],
+  validate: {
+    validator: function (v) {
+      return Array.isArray(v) && v.every(a => typeof a === 'object' && a.score !== undefined);
+    },
+    message: 'Each attempt must be an object with at least a score.',
+  },
+},
+
   },
   { _id: false }
 );
@@ -92,7 +102,7 @@ testDataSchema.pre("save", function (next) {
   next();
 });
 
-testDataSchema.index({ userId: 1, courseId: 1 }, { unique: true });
+testDataSchema.index({ userId: 1, quizId: 1 }, { unique: true });
 
 const TestData = mongoose.model("TestData", testDataSchema);
 export default TestData;

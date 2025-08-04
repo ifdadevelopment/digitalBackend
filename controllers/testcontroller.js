@@ -26,10 +26,18 @@ export const saveTestData = async (req, res, next) => {
       testData = new TestData({ userId, courseId });
     }
 
-    const attempt = quizReport?.attempts?.[0];
+    let attempt = quizReport?.attempts?.[0];
 
-    if (!attempt) {
-      return res.status(400).json({ error: "Missing attempt data in report." });
+    if (typeof attempt === 'number') {
+      attempt = {
+        score: attempt,
+        timestamp: new Date(),
+        userAnswers: userAnswers || {},
+      };
+    }
+
+    if (!attempt || typeof attempt !== 'object' || typeof attempt.score !== 'number') {
+      return res.status(400).json({ error: "Invalid or missing attempt data." });
     }
 
     const existingReport = testData.quizReports.get(safeQuizId) || {
@@ -43,15 +51,18 @@ export const saveTestData = async (req, res, next) => {
       incorrect: 0,
       percent: 0,
     };
-    const updatedAttempts = [...(existingReport.attempts || []), attempt];
-    if (updatedAttempts.length > 3) {
-      updatedAttempts.splice(0, updatedAttempts.length - 3);
-    }
 
-    const maxScore = Math.max(existingReport.maxScore, quizReport?.maxScore ?? attempt.score ?? 0);
+    const updatedAttempts = [...(existingReport.attempts || []), attempt];
+    // Optional: Keep only last 3
+    // if (updatedAttempts.length > 3) {
+    //   updatedAttempts.splice(0, updatedAttempts.length - 3);
+    // }
+
+    const maxScore = Math.max(existingReport.maxScore, attempt.score);
 
     const updatedReport = {
-      quizName: quizReport?.quizName || existingReport.quizName || quizId,
+      ...existingReport,
+      quizName: quizReport?.quizName || quizId,
       totalQuestions: quizReport?.totalQuestions ?? existingReport.totalQuestions ?? 0,
       attempts: updatedAttempts,
       maxScore,
@@ -81,9 +92,10 @@ export const saveTestData = async (req, res, next) => {
     });
   } catch (err) {
     console.error("❌ Error saving test data:", err);
-    next(err);
+    return res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 export const getTestData = async (req, res, next) => {
   try {
