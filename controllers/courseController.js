@@ -13,10 +13,10 @@ export const createCourse = async (req, res) => {
       });
     }
 
-    if (!["Student", "Business"].includes(data.type)) {
+    if (!["Courses", "Services"].includes(data.type)) {
       return res.status(400).json({
         success: false,
-        message: "Invalid course type. Must be 'Student' or 'Business'.",
+        message: "Invalid course type. Must be 'Courses' or 'Services'.",
       });
     }
 
@@ -56,7 +56,7 @@ for (const field of jsonFields) {
         try {
           const parsed = JSON.parse(data[field]);
           if (Array.isArray(parsed)) {
-            data[field] = parsed; // ✅ Save as array
+            data[field] = parsed; 
           } else {
             return res.status(400).json({
               success: false,
@@ -96,14 +96,14 @@ for (const field of jsonFields) {
       }
     }
     data.courseId = uuidv4();
-    if (data.type === "Business") {
+    if (data.type === "Services") {
       delete data.previewVideo;
       delete data.whatYouWillLearn;
       delete data.price;
       delete data.salePrice;
       delete data.topics;
       delete data.requirements;
-    } else if (data.type === "Student") {
+    } else if (data.type === "Courses") {
       delete data.downloadBrochure;
     }
     const newCourse = new Course(data);
@@ -151,10 +151,10 @@ export const getCourseById = async (req, res, next) => {
   try {
     const { courseId } = req.params;
 
-    let course = await Course.findOne({ courseId, type: "Student" });
+    let course = await Course.findOne({ courseId, type: "Courses" });
 
     if (!course) {
-      course = await Course.findOne({ courseId, type: "Business" });
+      course = await Course.findOne({ courseId, type: "Services" });
     }
 
     if (!course) {
@@ -260,7 +260,7 @@ export const editCourse = async (req, res, next) => {
         }
       });
     }
-    if (updateFields.type === "Business") {
+    if (updateFields.type === "Services") {
       Object.assign(updateFields, {
         previewVideo: undefined,
         whatYouWillLearn: undefined,
@@ -269,7 +269,7 @@ export const editCourse = async (req, res, next) => {
         topics: undefined,
         requirements: undefined,
       });
-    } else if (updateFields.type === "Student") {
+    } else if (updateFields.type === "Courses") {
       updateFields.downloadBrochure = undefined;
     }
 
